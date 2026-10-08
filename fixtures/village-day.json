@@ -1,0 +1,14 @@
+[
+  { "delay": 0, "event": { "hook_event_name": "SessionStart", "session_id": "willow" } },
+  { "delay": 1000, "event": { "hook_event_name": "UserPromptSubmit", "session_id": "willow" } },
+  { "delay": 0, "event": { "hook_event_name": "PreToolUse", "session_id": "willow", "tool_name": "Read", "tool_use_id": "read-1" } },
+  { "delay": 6000, "event": { "hook_event_name": "SubagentStart", "session_id": "willow", "agent_id": "sprout", "agent_type": "Explore" } },
+  { "delay": 0, "event": { "hook_event_name": "PreToolUse", "session_id": "willow", "agent_id": "sprout", "tool_name": "WebSearch", "tool_use_id": "search-1" } },
+  { "delay": 6000, "event": { "hook_event_name": "PostToolUse", "session_id": "willow", "tool_name": "Read", "tool_use_id": "read-1" } },
+  { "delay": 0, "event": { "hook_event_name": "PreToolUse", "session_id": "willow", "tool_name": "Edit", "tool_use_id": "edit-1" } },
+  { "delay": 7000, "event": { "hook_event_name": "PostToolUse", "session_id": "willow", "agent_id": "sprout", "tool_name": "WebSearch", "tool_use_id": "search-1" } },
+  { "delay": 0, "event": { "hook_event_name": "SubagentStop", "session_id": "willow", "agent_id": "sprout" } },
+  { "delay": 6500, "event": { "hook_event_name": "PostToolUse", "session_id": "willow", "tool_name": "Edit", "tool_use_id": "edit-1" } },
+  { "delay": 0, "event": { "hook_event_name": "TaskCompleted", "session_id": "willow" } },
+  { "delay": 3500, "event": { "hook_event_name": "Stop", "session_id": "willow" } }
+]

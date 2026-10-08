@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#233d32" />
+    <meta name="description" content="A cozy local pixel village where Claude sessions become adventurers and subagents become companions." />
+    <title>Pixel Village — a little world for your agents</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Pixel Village home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>pixel village<small>A LITTLE WORLD FOR YOUR AGENTS</small></span></a>
+        <div class="header-right"><span class="local-tag">LOCAL WORLD</span><span id="connection" class="connection"><i></i>Connecting</span><button class="text-button" id="setup-open">Connect Claude <span aria-hidden="true">↗</span></button></div>
+      </header>
+      <main>
+        <section class="intro"><div><p class="eyebrow">WORK HAPPENS. ADVENTURES FOLLOW.</p><h1>Your agents have a life here.</h1><p>They explore, make things, help each other. And sometimes, take a nap.</p></div><button class="primary-button" id="play-demo"><span aria-hidden="true">▶</span> Play a village day</button></section>
+        <div class="workspace">
+          <section class="world-panel" aria-label="Animated pixel village">
+            <div class="world-header"><span class="world-title"><span aria-hidden="true">✦</span> WILLOWBROOK <span class="world-subtitle">a tiny place to do big things</span></span><span class="weather"><span aria-hidden="true">☀</span> A fine day for a quest</span></div>
+            <div class="world-frame"><div id="game" role="img" aria-label="Pixel village with animated adventurers. Select a resident in the adjacent list for an accessible status."></div><div class="world-caption"><span><i class="live-dot"></i><span id="world-count">0 adventurers</span></span><span id="world-mode">YOUR LOCAL VILLAGE</span></div><div class="world-controls"><button id="motion-toggle" aria-pressed="false" title="Reduce motion">◌ <span>Motion</span></button><div class="zoom-group"><button id="zoom-out" aria-label="Zoom out">−</button><span id="zoom-value">1×</span><button id="zoom-in" aria-label="Zoom in">+</button></div></div></div>
+            <div class="world-legend"><span><i class="legend-pip work"></i>On a quest</span><span><i class="legend-pip wait"></i>Needs you</span><span><i class="legend-pip rest"></i>Taking it easy</span><span class="legend-hint">Click a character to say hello</span></div>
+          </section>
+          <aside class="sidebar" aria-label="Residents and activity">
+            <section class="residents-section"><div class="section-heading"><h2>Village residents</h2><span class="count-badge" id="resident-count">0</span></div><p class="section-description">A hero for every session. A friend for every subagent.</p><div id="residents" class="residents"></div></section>
+            <section id="character-detail" class="character-detail"><p class="empty-note">Choose a resident to see their story.</p></section>
+            <section class="activity-section"><div class="section-heading"><h2>Little happenings</h2><span class="live-label"><i></i>LIVE</span></div><div id="event-feed" class="event-feed" role="log" aria-label="Recent village activity"></div></section>
+          </aside>
+        </div>
+        <section class="story-panel" aria-label="Demo controls">
+          <div class="story-title"><span class="story-icon" aria-hidden="true">✧</span><div><h2>Make something happen.</h2><p>Try the hooks, and watch the village come alive.</p></div><span class="demo-tag">DEMO PLAYGROUND</span></div>
+          <div class="story-controls"><label class="resident-select-label"><span>ADVENTURER</span><select id="actor-select" aria-label="Choose demo adventurer"><option value="demo-willow">Willow</option></select></label><div class="action-buttons"><button data-action="new" class="action-button"><span aria-hidden="true">+</span> New session</button><button data-action="quest" class="action-button"><span aria-hidden="true">⚑</span> Start a quest</button><button data-action="companion" class="action-button"><span aria-hidden="true">♧</span> Send a companion</button><button data-action="complete" class="action-button"><span aria-hidden="true">✦</span> Finish work</button><button data-action="rest" class="action-button"><span aria-hidden="true">☾</span> Time to rest</button></div></div>
+          <details class="advanced"><summary>Explore individual hooks <span aria-hidden="true">⌄</span></summary><div class="advanced-controls"><label>Hook event<select id="hook-select"></select></label><label>Tool / station<select id="tool-select"><option value="Read">Read · library</option><option value="Edit">Edit · forge</option><option value="WebSearch">WebSearch · telescope</option><option value="Bash">Bash · training yard</option></select></label><button id="send-hook" class="secondary-button">Send event</button><button id="reset-demo" class="text-button muted">Clear demo residents</button></div><p>Worktree operations are shown indirectly; the observer never takes over Git operations.</p></details>
+        </section>
+        <footer><span>Made of tiny pixels &amp; big imaginations.</span><span>Original characters · stays on your computer</span></footer>
+      </main>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <dialog id="setup-dialog"><form method="dialog"><button class="dialog-close" aria-label="Close setup">×</button></form><p class="eyebrow">LET YOUR REAL AGENTS MOVE IN</p><h2>Connect Claude Code</h2><p>The village is ready for local hook events. Generate a configuration, merge it into your Claude project settings, then start a new session.</p><ol><li>Keep this local server running.</li><li>In this project directory, run:<code>npm run hooks:generate</code></li><li>Follow the generated setup instructions in <strong>README.md</strong>. Preserve your existing hooks.</li></ol><p class="dialog-note">The bridge sends event names and IDs, never your prompts or code. If the village is closed, Claude keeps working normally.</p><a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noopener">Claude Code hook reference ↗</a></dialog>
+    <script type="module" src="/src/client/main.ts"></script>
+  </body>
+</html>
