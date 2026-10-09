@@ -22,7 +22,7 @@ Only metadata needed for identity and activity is retained. Prompts, source code
 
 `src/client/scenery.ts` draws the original top-down village and its walkability grid. `src/client/navigation.ts` routes around solid props. `src/client/world.ts` assigns station slots, animates residents, gives each station a distinct action, provides selection/zoom, draws earned decorative banners, and applies an optional night overlay. `src/shared/roles.ts` maps Claude `agent_type` metadata to designer, developer, project manager, explorer, planner, tester, or general companion identity. `src/client/sprites.ts` generates pixel adventurers and companions from code-native templates, palettes, role accessories, and look variants. A late agent type can upgrade a general companion without resetting its work. The sidebar is ordinary HTML for accessible status, search, attention, timeline, and controls. Custom names, looks, night mode and gentle sounds are browser-local preferences.
 
-The world uses nearest-neighbor rendering and a fixed feet anchor. Reduced motion follows the browser preference and can be toggled on the map. Crowded stations spread residents in rings; occupancy and pathfinding should be checked together when adding props or stations.
+The world uses nearest-neighbor rendering and a fixed feet anchor. The full-tab toggle expands the existing scene without recreating it; the canvas keeps its 3:2 proportions and the button or Escape returns to the dashboard. Reduced motion follows the browser preference and can be toggled on the map. Crowded stations spread residents in rings; occupancy and pathfinding should be checked together when adding props or stations.
 
 ## Project boundaries
 

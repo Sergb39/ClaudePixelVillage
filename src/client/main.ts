@@ -217,6 +217,18 @@ function updateWeather() { $('weather').innerHTML = settings.night ? '<span aria
 updateWeather();
 $('zoom-in').onclick = () => { scene.setZoom(scene.zoomLevel + .25); $('zoom-value').textContent = `${scene.zoomLevel}×`; };
 $('zoom-out').onclick = () => { scene.setZoom(scene.zoomLevel - .25); $('zoom-value').textContent = `${scene.zoomLevel}×`; };
+const fullTabButton = $<HTMLButtonElement>('full-tab-toggle');
+const worldPanel = document.querySelector<HTMLElement>('.world-panel')!;
+function setFullTab(expanded: boolean) {
+  worldPanel.classList.toggle('is-full-tab', expanded);
+  document.body.classList.toggle('village-full-tab', expanded);
+  fullTabButton.setAttribute('aria-pressed', String(expanded));
+  fullTabButton.setAttribute('aria-label', expanded ? 'Exit full-tab village' : 'Expand village to full tab');
+  fullTabButton.title = expanded ? 'Exit full-tab village (Esc)' : 'Expand village to full tab';
+  fullTabButton.innerHTML = expanded ? '⤡ <span>Exit full tab</span>' : '⤢ <span>Full tab</span>';
+}
+fullTabButton.onclick = () => setFullTab(!worldPanel.classList.contains('is-full-tab'));
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && worldPanel.classList.contains('is-full-tab')) setFullTab(false); });
 const motionButton = $<HTMLButtonElement>('motion-toggle');
 motionButton.setAttribute('aria-pressed', String(scene.reducedMotion));
 motionButton.onclick = () => { scene.setMotion(!scene.reducedMotion); motionButton.setAttribute('aria-pressed', String(scene.reducedMotion)); motionButton.innerHTML = `${scene.reducedMotion ? '◍' : '◌'} <span>${scene.reducedMotion ? 'Calm' : 'Motion'}</span>`; };

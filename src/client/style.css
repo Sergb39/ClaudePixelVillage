@@ -27,3 +27,15 @@
 .story-controls{flex-wrap:wrap}
 .agent-role-select{min-width:145px}
 @media(max-width:600px){.agent-role-select{min-width:0;width:100%}}
+
+/* Full-tab village view */
+.world-header .weather{margin-left:auto}
+.full-tab-toggle{border:1px solid #d2dac6;background:#fffdf4;border-radius:5px;color:#546c48;padding:6px 9px;font:10px var(--mono);white-space:nowrap}
+.full-tab-toggle:hover{background:#e8efd9}
+.full-tab-toggle span{margin-left:5px}
+body.village-full-tab{overflow:hidden}
+.world-panel.is-full-tab{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;width:100%;height:100dvh;border:0;border-radius:0;box-shadow:none}
+.world-panel.is-full-tab .world-frame{flex:1;min-height:0;aspect-ratio:auto}
+.world-panel.is-full-tab #game canvas{width:min(100vw,calc((100dvh - 86px)*1.5))!important;height:auto!important;max-width:100%;max-height:100%;object-fit:contain}
+.world-panel.is-full-tab .world-legend{min-height:39px;background:#fbfcf4}
+@media(max-width:600px){.full-tab-toggle span{display:none}.world-panel.is-full-tab .full-tab-toggle span{display:inline}.world-panel.is-full-tab .world-caption>span:first-child{font-size:9px}}
