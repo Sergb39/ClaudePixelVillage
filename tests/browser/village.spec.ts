@@ -44,3 +44,14 @@ test('receiver status recovers after the event stream reconnects', async ({ page
   await page.reload();
   await expect(page.locator('#connection')).toContainText('Receiver connected');
 });
+
+test('tool metadata is displayed as text rather than executable HTML', async ({ page }) => {
+  await page.goto('/');
+  const payload = '<img src=x onerror="window.__villageXss=true">';
+  await page.evaluate(async toolName => {
+    await fetch('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'demo-xss-check', tool_use_id: 'xss', tool_name: toolName }) });
+  }, payload);
+  await page.locator('[data-resident="demo-xss-check"]').click();
+  await expect(page.locator('#character-detail')).toContainText(payload);
+  expect(await page.evaluate(() => (window as typeof window & { __villageXss?: boolean }).__villageXss)).toBeUndefined();
+});

@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { resolve, extname, sep } from 'node:path';
 import { emptySnapshot, reduceEvent, sanitizeEvent, tickSnapshot } from '../shared/reducer';
 import type { ActorState, Snapshot } from '../shared/types';
@@ -8,14 +8,22 @@ import { isAgentRole } from '../shared/roles';
 
 export function createVillageServer(options: { root?: string; port?: number; middleware?: (req: IncomingMessage, res: ServerResponse, next: () => void) => void } = {}) {
   const root = options.root ?? process.cwd(); const port = options.port ?? 4317;
-  const dataDir = resolve(root, '.village'); mkdirSync(dataDir, { recursive: true });
+  const dataDir = resolve(root, '.village'); mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  if (lstatSync(dataDir).isSymbolicLink()) throw new Error('Village data directory must not be a symlink');
+  if (process.platform !== 'win32') chmodSync(dataDir, 0o700);
   const tokenPath = resolve(dataDir, 'token');
+  if (existsSync(tokenPath) && (!lstatSync(tokenPath).isFile() || lstatSync(tokenPath).isSymbolicLink())) throw new Error('Village token must be a regular file');
   const token = existsSync(tokenPath) ? readFileSync(tokenPath, 'utf8').trim() : randomBytes(32).toString('hex');
-  if (!existsSync(tokenPath)) writeFileSync(tokenPath, token, { mode: 0o600 });
+  if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('Village token is invalid; remove .village/token and restart to rotate it');
+  if (!existsSync(tokenPath)) writeFileSync(tokenPath, token, { mode: 0o600, flag: 'wx' });
+  if (process.platform !== 'win32') chmodSync(tokenPath, 0o600);
   const browserToken = randomBytes(24).toString('hex');
   let state: Snapshot = emptySnapshot();
+  const snapshotPath = resolve(dataDir, 'snapshot.json');
+  if (existsSync(snapshotPath) && lstatSync(snapshotPath).isSymbolicLink()) throw new Error('Village snapshot must not be a symlink');
   try {
-    const saved = JSON.parse(readFileSync(resolve(dataDir, 'snapshot.json'), 'utf8')) as Snapshot;
+    if (existsSync(snapshotPath) && process.platform !== 'win32') chmodSync(snapshotPath, 0o600);
+    const saved = JSON.parse(readFileSync(snapshotPath, 'utf8')) as Snapshot;
     // Copy only allowed fields, preserving heroes whose starts aged out of the journal.
     const activities = ['arriving', 'thinking', 'working', 'waiting', 'celebrating', 'resting', 'sleeping', 'leaving', 'interrupted'];
     const stations = ['gate', 'board', 'library', 'forge', 'observatory', 'training', 'campfire', 'beds'];
@@ -26,7 +34,7 @@ export function createVillageServer(options: { root?: string; port?: number; mid
       const rebuilt = reduceEvent(emptySnapshot(), event);
       const id = event.session_id + (event.agent_id ? `::${event.agent_id}` : '');
       const clean = rebuilt.actors[id];
-      if (typeof actor.name === 'string' && /^(Sprout|Pip|Moss|Pebble|Scout|Sage|Muse|Tinker|Steward|Glint) [a-z0-9]{4}$/.test(actor.name)) clean.name = actor.name;
+      if (typeof actor.name === 'string' && /^(Sprout|Pip|Moss|Pebble|Scout|Sage|Muse|Tinker|Steward|Glint) (?:[a-z0-9]{4}|[0-9]{3})$/.test(actor.name)) clean.name = actor.name;
       if (isAgentRole(actor.role) && (actor.agentId || actor.role === 'lead')) clean.role = actor.role;
       if (Number.isInteger(actor.palette) && actor.palette >= 0 && actor.palette < 8) clean.palette = actor.palette;
       if (activities.includes(actor.activity)) clean.activity = actor.activity;
@@ -53,12 +61,16 @@ export function createVillageServer(options: { root?: string; port?: number; mid
   } catch { /* First launch, or a corrupt snapshot, starts a new village. */ }
   state = tickSnapshot(state);
   const streams = new Set<ServerResponse>();
-  const persist = () => { const temporary = resolve(dataDir, 'snapshot.tmp'); writeFileSync(temporary, JSON.stringify(state)); renameSync(temporary, resolve(dataDir, 'snapshot.json')); };
+  const persist = () => { const temporary = resolve(dataDir, `snapshot.${process.pid}.${randomBytes(6).toString('hex')}.tmp`); writeFileSync(temporary, JSON.stringify(state), { mode: 0o600, flag: 'wx' }); renameSync(temporary, resolve(dataDir, 'snapshot.json')); };
   const broadcast = () => { persist(); const frame = `id: ${state.sequence}\nevent: snapshot\ndata: ${JSON.stringify(state)}\n\n`; for (const response of streams) { if (response.writableLength > 1_000_000) { response.end(); streams.delete(response); } else response.write(frame); } };
   const equal = (value: string, expected: string) => { const actualBytes = Buffer.from(value); const expectedBytes = Buffer.from(expected); return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes); };
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
   const json = (res: ServerResponse, status: number, value: unknown) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
   const server = createServer(async (req, res) => {
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
     const host = req.headers.host ?? '';
     if (![`127.0.0.1:${port}`, `localhost:${port}`].includes(host)) { json(res, 403, { error: 'Local host required' }); return; }
     let decodedPath: string;
@@ -105,7 +117,12 @@ export function createVillageServer(options: { root?: string; port?: number; mid
       try { file = resolve(dist, '.' + decodeURIComponent(pathname)); } catch { json(res, 400, { error: 'Invalid path' }); return; }
       if (!file.startsWith(dist + sep) && file !== dist) { json(res, 403, { error: 'Invalid path' }); return; }
       if (!existsSync(file) || file === dist) file = resolve(dist, 'index.html');
-      try { const content = readFileSync(file); const mime: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json', '.svg': 'image/svg+xml' }; res.writeHead(200, { 'Content-Type': mime[extname(file)] ?? 'application/octet-stream' }); res.end(content); }
+      try {
+        if (lstatSync(dist).isSymbolicLink()) { json(res, 403, { error: 'Invalid path' }); return; }
+        const actualDist = realpathSync(dist), actualFile = realpathSync(file);
+        if (actualFile !== actualDist && !actualFile.startsWith(actualDist + sep)) { json(res, 403, { error: 'Invalid path' }); return; }
+        const content = readFileSync(actualFile); const mime: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json', '.svg': 'image/svg+xml' }; res.writeHead(200, { 'Content-Type': mime[extname(actualFile)] ?? 'application/octet-stream' }); res.end(content);
+      }
       catch { json(res, 404, { error: 'Build the village first with npm run build' }); }
     };
     if (options.middleware) options.middleware(req, res, serveStatic); else serveStatic();

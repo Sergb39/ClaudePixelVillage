@@ -64,7 +64,9 @@ Animations are interpretations of hook metadata, not observations of Claude's pr
 
 ## Local data and security
 
-The server binds only to `127.0.0.1:4317`. `.village/snapshot.json` stores current residents, completed quest count, and the last 300 sanitized events. `.village/token` authenticates mod delivery. Both are ignored by Git. Browser writes require the local origin and an HttpOnly SameSite cookie. The token is never served to the browser or committed.
+The server binds only to `127.0.0.1:4317`. `.village/snapshot.json` stores current residents, completed quest count, and the last 300 sanitized events. `.village/token` authenticates mod delivery. Both are ignored by Git. Browser writes require the local origin and an HttpOnly SameSite cookie. The token is never served to the browser or committed. Startup rejects an invalid token or symlinked private state; on macOS/Linux the data directory is restricted to its owner and the token and snapshot to owner read/write. Static files cannot follow symlinks outside the build directory. Responses block framing and MIME sniffing.
+
+This is a local personal app, not a multi-user security boundary. Other programs running as your user can read the token and local snapshot, and unauthenticated local GET requests can read the sanitized village state. On Windows, file access follows the directory's NTFS ACLs; keep the checkout in a private user-owned location. If the token is exposed, stop the receiver, delete `.village/token`, restart it, and reload the Claude mod so it reads the replacement. Do not expose port 4317 through a proxy or tunnel without adding authentication to reads as well.
 
 - `GET /api/health`: receiver status
 - `GET /api/state`: sanitized snapshot
@@ -82,9 +84,10 @@ npm test
 npm run build
 npm run mod:prepare
 npm run test:browser
+npm audit --audit-level=high
 ```
 
-Unit tests cover lifecycle, replay reconstruction, parallel and reordered tools, high-volume history eviction, stale activity, persistence, local authentication, path protection, navigation, mod packaging, queue/retry behavior, and legacy migration. Browser tests cover the full-tab HUD, replay controls, mobile layout, and season persistence; install Chromium once with `npx playwright install chromium` before `npm run test:browser`. CI installs it automatically. For a native Claude validator check, run `claude plugin validate ./mod` and `claude plugin test ./mod` with a supported Claude Code version. A successful validator is separate from a real event-delivery check; use `/village` and a fresh local session for that.
+Unit tests cover lifecycle, replay reconstruction, parallel and reordered tools, high-volume history eviction, stale activity, persistence, local authentication, path protection, navigation, mod packaging, queue/retry behavior, and legacy migration. Browser tests cover the full-tab HUD, replay controls, mobile layout, season persistence, and HTML injection safety; install Chromium once with `npx playwright install chromium` before `npm run test:browser`. CI installs it automatically and checks for high-severity dependency advisories. An advisory scan does not detect every security defect. For a native Claude validator check, run `claude plugin validate ./mod` and `claude plugin test ./mod` with a supported Claude Code version. A successful validator is separate from a real event-delivery check; use `/village` and a fresh local session for that.
 
 `npm run demo:replay` replays the sample story. `npm run demo:replay -- path/to/snapshot.json` replays a sanitized journal under new `demo-replay-*` IDs. Clear demo residents from the browser afterward.
 
