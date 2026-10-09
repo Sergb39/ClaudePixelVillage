@@ -21,6 +21,9 @@ export class VillageScene extends Phaser.Scene {
   onReady: () => void = () => {};
   private portraitCache = new Map<string, string>();
   private ambient: Phaser.GameObjects.GameObject[] = [];
+  private nightOverlay?: Phaser.GameObjects.Rectangle;
+  private night = false;
+  private milestoneMarkers: Phaser.GameObjects.Container[] = [];
   constructor() { super('village'); }
   create() {
     const village = drawVillage(this);
@@ -31,6 +34,7 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#b8ce8a');
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.addAmbient();
+    this.nightOverlay = this.add.rectangle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, WORLD_WIDTH, WORLD_HEIGHT, 0x263d68, .32).setDepth(3000).setScrollFactor(0).setVisible(this.night);
     this.setMotion(this.reducedMotion);
     this.ready = true;
     if (this.latest) this.sync(this.latest);
@@ -38,6 +42,7 @@ export class VillageScene extends Phaser.Scene {
   }
   sync(snapshot: Snapshot) {
     this.latest = snapshot; if (!this.ready) return;
+    this.updateMilestones(snapshot.completedQuests ?? 0);
     for (const [id, data] of Object.entries(snapshot.actors)) {
       let resident = this.residents.get(id);
       // Historical departures must not briefly respawn at the gate on refresh.
@@ -47,6 +52,8 @@ export class VillageScene extends Phaser.Scene {
       const oldActivity = resident.data.activity;
       const changed = oldEvent !== data.lastEvent || oldUpdated !== data.updatedAt;
       resident.data = data;
+      const prefix = createActorTextures(this, data.palette, data.kind, data.look);
+      if (resident.prefix !== prefix) { resident.prefix = prefix; resident.sprite.setTexture(prefix); resident.animation = ''; }
       if (data.activity === 'leaving') resident.deliverUntil = 0;
       if (changed) {
         if (data.lastEvent === 'SubagentStop' && data.activity === 'celebrating' && oldActivity !== 'celebrating') { resident.deliverUntil = this.time.now + COMPANION_RETURN_MS; this.sparkle(resident.container.x, resident.container.y - 35, '✦'); }
@@ -62,7 +69,7 @@ export class VillageScene extends Phaser.Scene {
     }
   }
   private spawn(data: ActorState): Resident {
-    const prefix = createActorTextures(this, data.palette, data.kind);
+    const prefix = createActorTextures(this, data.palette, data.kind, data.look);
     const birth = stations.gate;
     const offset = ((this.hash(data.id) % 5) - 2) * 15;
     const container = this.add.container(birth.x + offset, birth.y);
@@ -88,13 +95,15 @@ export class VillageScene extends Phaser.Scene {
     const index = sorted.findIndex(r => r.data.id === data.id);
     if (data.station === 'campfire') {
       const seats = [[-60, 35], [65, 35], [-60, -8], [65, -8], [-85, 68], [85, 68], [0, 78]];
+      const ring = Math.floor(Math.max(0, index) / seats.length);
       const seat = seats[Math.max(0, index) % seats.length];
-      return { x: station.x + seat[0], y: station.y + seat[1] };
+      return { x: station.x + seat[0] + (seat[0] < 0 ? -ring * 18 : ring * 18), y: station.y + seat[1] + ring * 24 };
     }
     // Stagger station slots so multiple agents remain visible.
     const offsets = [[0, 0], [-43, 10], [43, 10], [-24, 37], [25, 37], [-65, 35], [65, 35], [0, 60]];
+    const ring = Math.floor(Math.max(0, index) / offsets.length);
     const slot = offsets[Math.max(0, index) % offsets.length];
-    return { x: station.x + slot[0], y: station.y + slot[1] };
+    return { x: station.x + slot[0] + (slot[0] < 0 ? -ring * 24 : ring * 24), y: station.y + slot[1] + ring * 24 };
   }
   private route(resident: Resident) {
     const requested = this.destination(resident);
@@ -128,13 +137,14 @@ export class VillageScene extends Phaser.Scene {
       }
       const activity = r.data.activity;
       if (!walking && r.data.station === 'campfire') r.facing = r.container.x < stations.campfire.x ? 'right' : 'left';
-      const state = walking ? 'walk' : activity === 'sleeping' ? 'sleep' : activity === 'celebrating' ? 'cheer' : activity === 'working' || activity === 'thinking' ? 'work' : 'idle';
+      const stationAnimation = { library: 'read', forge: 'forge', observatory: 'gaze', training: 'train', board: 'work', gate: 'idle', campfire: 'idle', beds: 'sleep' } as const;
+      const state = walking ? 'walk' : activity === 'sleeping' ? 'sleep' : activity === 'celebrating' ? 'cheer' : activity === 'working' || activity === 'thinking' ? stationAnimation[r.data.station] : 'idle';
       const key = animationKey(r.prefix, state, r.facing);
       if (key !== r.animation) { r.sprite.play(key); r.animation = key; }
       if (this.reducedMotion) r.sprite.anims.pause(); else if (r.sprite.anims.isPaused) r.sprite.anims.resume();
       r.container.setDepth(Math.round(r.container.y) + 20);
       const recent = Date.now() - r.data.updatedAt < 2500;
-      const symbol = activity === 'waiting' ? '?' : activity === 'sleeping' ? 'z z' : activity === 'interrupted' ? '!' : activity === 'celebrating' ? '♥' : recent && r.data.lastEvent === 'MessageDisplay' ? '…' : recent && r.data.lastEvent === 'Notification' ? '♪' : recent && /ModelSwitch/.test(r.data.lastEvent) ? '✦' : '';
+      const symbol = r.data.stale ? '…' : activity === 'waiting' ? '?' : activity === 'sleeping' ? 'z z' : activity === 'interrupted' ? '!' : activity === 'celebrating' ? '♥' : recent && r.data.lastEvent === 'MessageDisplay' ? '…' : recent && r.data.lastEvent === 'Notification' ? '♪' : recent && /ModelSwitch/.test(r.data.lastEvent) ? '✦' : '';
       r.bubble.setText(symbol).setVisible(!!symbol && !walking);
       r.bubble.y = (r.data.kind === 'hero' ? -76 : -51) + (this.reducedMotion ? 0 : Math.round(Math.sin(this.time.now / 550 + this.hash(id)) * 2));
       r.selection.clear();
@@ -149,6 +159,17 @@ export class VillageScene extends Phaser.Scene {
     }
   }
   select(id?: string) { this.selectedId = id; }
+  setNight(value: boolean) { this.night = value; this.nightOverlay?.setVisible(value); }
+  private updateMilestones(completed: number) {
+    const count = Math.min(6, Math.floor(completed / 3));
+    while (this.milestoneMarkers.length < count) {
+      const index = this.milestoneMarkers.length;
+      const x = 290 + index * 62; const y = 107;
+      const marker = this.add.container(x, y).setDepth(y);
+      marker.add([this.add.rectangle(0, 8, 3, 25, 0x705642), this.add.rectangle(8, 0, 17, 11, [0xe9b97b, 0xb9a7db, 0x9ed4b8][index % 3]), this.add.rectangle(8, 2, 12, 3, 0xf7e5bd)]);
+      this.milestoneMarkers.push(marker);
+    }
+  }
   setMotion(reduced: boolean) {
     this.reducedMotion = reduced;
     for (const object of this.ambient) {
@@ -168,7 +189,7 @@ export class VillageScene extends Phaser.Scene {
   }
   portrait(data: ActorState): string {
     if (!this.ready) return '';
-    const prefix = createActorTextures(this, data.palette, data.kind); const cached = this.portraitCache.get(prefix); if (cached) return cached;
+    const prefix = createActorTextures(this, data.palette, data.kind, data.look); const cached = this.portraitCache.get(prefix); if (cached) return cached;
     const width = data.kind === 'hero' ? 24 : 16; const height = data.kind === 'hero' ? 32 : 20;
     const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
     const source = this.textures.get(prefix).getSourceImage() as HTMLCanvasElement;

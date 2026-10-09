@@ -29,6 +29,8 @@ export function createVillageServer(options: { root?: string; port?: number; mid
       if (activities.includes(actor.activity)) clean.activity = actor.activity;
       if (stations.includes(actor.station)) clean.station = actor.station;
       clean.updatedAt = Number.isFinite(actor.updatedAt) ? actor.updatedAt : Date.now();
+      clean.lastObservedAt = Number.isFinite(actor.lastObservedAt) ? actor.lastObservedAt : clean.updatedAt;
+      clean.stale = actor.stale === true;
       if (Number.isFinite(actor.finishedAt)) clean.finishedAt = actor.finishedAt;
       clean.lastEvent = sanitizeEvent({ ...event, hook_event_name: actor.lastEvent })?.hook_event_name ?? 'SessionStart';
       const safeTool = sanitizeEvent({ ...event, tool_name: actor.toolName }); clean.toolName = safeTool?.tool_name;
@@ -36,17 +38,20 @@ export function createVillageServer(options: { root?: string; port?: number; mid
         const safe = sanitizeEvent({ ...event, tool_name: toolName, tool_use_id: toolId });
         if (safe?.tool_use_id && safe.tool_name) Object.defineProperty(clean.activeTools, safe.tool_use_id, { value: safe.tool_name, enumerable: true, configurable: true, writable: true });
       }
+      clean.completedTools = Object.fromEntries(Object.entries(actor.completedTools ?? {}).slice(-500).flatMap(([id, at]) => typeof id === 'string' && id.length <= 160 && Number.isFinite(at) ? [[id, at]] : []));
+      if (actor.pendingWait === null || typeof actor.pendingWait === 'string' && actor.pendingWait.length <= 160) clean.pendingWait = actor.pendingWait;
       actors[id] = clean as ActorState;
     }
     state.actors = actors;
     state.closedActors = Object.fromEntries(Object.entries(saved.closedActors ?? {}).slice(-500).flatMap(([id, closed]) => id.length <= 322 && Number.isFinite(closed.at) && ['SubagentStop', 'SessionEnd'].includes(closed.event) ? [[id, { event: closed.event, at: closed.at }]] : []));
     state.journal = (saved.journal ?? []).slice(-300).flatMap(entry => { const event = sanitizeEvent(entry); return event && Number.isFinite(entry.sequence) && Number.isFinite(entry.receivedAt) ? [{ ...event, sequence: entry.sequence, receivedAt: entry.receivedAt }] : []; });
     if (Number.isSafeInteger(saved.sequence)) state.sequence = Math.max(state.sequence, saved.sequence);
+    if (typeof saved.completedQuests === 'number' && Number.isSafeInteger(saved.completedQuests) && saved.completedQuests >= 0) state.completedQuests = saved.completedQuests;
   } catch { /* First launch, or a corrupt snapshot, starts a new village. */ }
   state = tickSnapshot(state);
   const streams = new Set<ServerResponse>();
   const persist = () => { const temporary = resolve(dataDir, 'snapshot.tmp'); writeFileSync(temporary, JSON.stringify(state)); renameSync(temporary, resolve(dataDir, 'snapshot.json')); };
-  const broadcast = () => { persist(); for (const response of streams) response.write(`id: ${state.sequence}\nevent: snapshot\ndata: ${JSON.stringify(state)}\n\n`); };
+  const broadcast = () => { persist(); const frame = `id: ${state.sequence}\nevent: snapshot\ndata: ${JSON.stringify(state)}\n\n`; for (const response of streams) { if (response.writableLength > 1_000_000) { response.end(); streams.delete(response); } else response.write(frame); } };
   const equal = (value: string, expected: string) => { const actualBytes = Buffer.from(value); const expectedBytes = Buffer.from(expected); return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes); };
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
   const json = (res: ServerResponse, status: number, value: unknown) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
@@ -103,6 +108,7 @@ export function createVillageServer(options: { root?: string; port?: number; mid
     if (options.middleware) options.middleware(req, res, serveStatic); else serveStatic();
   });
   const timer = setInterval(() => { const next = tickSnapshot(state); if (next !== state) { state = next; broadcast(); } else for (const response of streams) response.write(': heartbeat\n\n'); }, 1000); timer.unref();
-  server.on('close', () => { clearInterval(timer); for (const response of streams) response.end(); });
-  return { server, getState: () => state, token };
+  server.on('close', () => clearInterval(timer));
+  const close = () => { clearInterval(timer); for (const response of streams) response.end(); streams.clear(); return new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); };
+  return { server, close, getState: () => state, token };
 }

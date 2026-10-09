@@ -6,5 +6,6 @@ All current character sprites, scenery, favicon and map decorations are original
 - `src/client/scenery.ts`: original cottages, forge, telescope, forest, pond, paths and village props.
 - `src/client/world.ts`: butterflies, shadows and event effects.
 - `public/favicon.svg`: original pixel tree mark.
+- `public/village-preview.svg`: original illustrated station map drawn for the repository guide.
 
 Phaser and other npm dependencies retain their own licenses in their distributions. Future external art should be recorded here with its source, license and any required attribution.

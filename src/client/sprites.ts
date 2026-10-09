@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 
-export type ActorAnimation = 'idle' | 'walk' | 'work' | 'sleep' | 'cheer';
+export type ActorAnimation = 'idle' | 'walk' | 'work' | 'read' | 'forge' | 'gaze' | 'train' | 'sleep' | 'cheer';
 export type ActorFacing = 'down' | 'up' | 'left' | 'right';
-const states: ActorAnimation[] = ['idle', 'walk', 'work', 'sleep', 'cheer'];
+const states: ActorAnimation[] = ['idle', 'walk', 'work', 'read', 'forge', 'gaze', 'train', 'sleep', 'cheer'];
 const directions: ActorFacing[] = ['down', 'up', 'left', 'right'];
 const palettes = [
   ['#66ad70', '#a5e38d', '#355940'], ['#679acc', '#b0daf0', '#354a74'],
@@ -17,9 +17,10 @@ export function animationKey(prefix: string, state: ActorAnimation, facing: Acto
 }
 
 /** Original pixel templates, authored directly at native resolution. Feet anchor: (width/2,height). */
-export function createActorTextures(scene: Phaser.Scene, palette: number, kind: 'hero' | 'companion'): string {
+export function createActorTextures(scene: Phaser.Scene, palette: number, kind: 'hero' | 'companion', look = 0): string {
   const index = ((Math.floor(palette) % palettes.length) + palettes.length) % palettes.length;
-  const prefix = `actor-${kind}-${index}`;
+  const variant = Math.max(0, Math.min(2, Math.floor(look) || 0));
+  const prefix = `actor-${kind}-${index}-${variant}`;
   if (scene.textures.exists(prefix)) return prefix;
   const width = kind === 'hero' ? 24 : 16;
   const height = kind === 'hero' ? 32 : 20;
@@ -35,8 +36,8 @@ export function createActorTextures(scene: Phaser.Scene, palette: number, kind: 
       for (let frame = 0; frame < 4; frame++) {
         context.save();
         context.translate(frame * width, (s * 4 + d) * height);
-        if (kind === 'hero') drawHero(context, colors, states[s]!, directions[d]!, frame);
-        else drawCompanion(context, colors, states[s]!, directions[d]!, frame);
+        if (kind === 'hero') drawHero(context, colors, states[s]!, directions[d]!, frame, variant);
+        else drawCompanion(context, colors, states[s]!, directions[d]!, frame, variant);
         context.restore();
       }
     }
@@ -70,7 +71,7 @@ function painter(context: CanvasRenderingContext2D) {
   };
 }
 
-function drawHero(context: CanvasRenderingContext2D, colors: string[], state: ActorAnimation, direction: ActorFacing, frame: number) {
+function drawHero(context: CanvasRenderingContext2D, colors: string[], state: ActorAnimation, direction: ActorFacing, frame: number, look: number) {
   const r = painter(context);
   const [coat, light, dark] = colors as [string, string, string];
   const skin = '#efbf91';
@@ -92,10 +93,10 @@ function drawHero(context: CanvasRenderingContext2D, colors: string[], state: Ac
   r(ink, 6, 17 + bob, 13, 11); r(dark, 7, 18 + bob, 11, 9);
   r(coat, 8, 18 + bob, 9, 7); r(light, 8, 18 + bob, 2, 6);
   r('#bfa16b', 7, 25 + bob, 11, 2); r('#f5dc8e', 11, 25 + bob, 2, 2);
-  const hands = state === 'cheer' ? 12 + bob : state === 'work' ? 18 + bob + (frame % 2) : 21 + bob;
+  const hands = state === 'cheer' ? 12 + bob : ['work', 'forge', 'train'].includes(state) ? 18 + bob + (frame % 2) : 21 + bob;
   r(ink, 4, hands, 3, 5); r(skin, 5, hands, 2, 4);
   r(ink, 18, hands, 3, 5); r(skin, 18, hands, 2, 4);
-  if (state === 'work') {
+  if (state === 'work' || state === 'forge' || state === 'train') {
     r(ink, 20, 12 + frame % 2, 1, 10); r('#b4c6c8', 18, 11 + frame % 2, 5, 3);
   }
   r(ink, 7, 7 + bob, 11, 12); r(hair, 8, 8 + bob, 9, 10);
@@ -114,9 +115,15 @@ function drawHero(context: CanvasRenderingContext2D, colors: string[], state: Ac
   r(ink, 15, 2 + bob, 5, 4); r(coat, 9, 5 + bob, 8, 4);
   r(coat, 16, 3 + bob, 3, 3); r(light, 9, 5 + bob, 5, 1);
   r(dark, 7, 9 + bob, 11, 1); r('#f9d994', 6, 3 + bob, 2, 5); r('#fff0c8', 6, 2 + bob, 1, 3);
+  if (look === 1) { r('#735239', 5, 7 + bob, 15, 3); r(light, 10, 4 + bob, 7, 3); }
+  if (look === 2) { r('#72a46d', 5, 7 + bob, 15, 3); r('#f4b5c3', 8, 4 + bob, 3, 3); r('#e6df8c', 15, 3 + bob, 3, 3); }
+  if (state === 'read') { r(ink, 2, 19, 11, 8); r('#f2e6bf', 3, 20, 9, 6); r('#d3a96d', 7, 20, 1, 6); }
+  if (state === 'forge') { r('#f4ae53', 2 + frame % 2, 14, 3, 4); r('#ffe4a2', 3 + frame % 2, 13, 1, 3); }
+  if (state === 'gaze') { r('#b6d7db', 18, 17, 5, 3); r(ink, 20, 16, 2, 10); r('#f6e9af', 21, 12 + frame % 2, 2, 2); }
+  if (state === 'train') { r('#c7bdb0', 2, 24, 6, 2); r('#f8e29a', 2 + frame % 2, 13, 2, 2); }
 }
 
-function drawCompanion(context: CanvasRenderingContext2D, colors: string[], state: ActorAnimation, direction: ActorFacing, frame: number) {
+function drawCompanion(context: CanvasRenderingContext2D, colors: string[], state: ActorAnimation, direction: ActorFacing, frame: number, look: number) {
   const r = painter(context);
   const [fur, light, dark] = colors as [string, string, string];
   if (direction === 'left') { context.translate(16, 0); context.scale(-1, 1); }
@@ -133,6 +140,8 @@ function drawCompanion(context: CanvasRenderingContext2D, colors: string[], stat
   r(dark, 4 + stride, 18, 2, 1); r(dark, 10 - stride, 18, 2, 1);
   // Sprout-eared woodland creature with rounded cheeks, tail, and neck scarf.
   r(ink, 3, 3 + bob, 3, 6); r(ink, 10, 2 + bob, 3, 7);
+  if (look === 1) { r(dark, 1, 7 + bob, 4, 4); r(dark, 11, 6 + bob, 4, 4); }
+  if (look === 2) { r(light, 2, 2 + bob, 3, 4); r(light, 11, 2 + bob, 3, 4); }
   r(light, 4, 4 + bob, 1, 4); r(light, 11, 3 + bob, 1, 5);
   r(ink, 3, 7 + bob, 10, 10); r(ink, 2, 9 + bob, 12, 6);
   r(fur, 4, 7 + bob, 8, 10); r(fur, 3, 9 + bob, 10, 6);
@@ -149,6 +158,6 @@ function drawCompanion(context: CanvasRenderingContext2D, colors: string[], stat
   }
   r('#e7c27b', 4, 16 + bob, 8, 1); r('#c47f48', 10, 17 + bob, 2, 2);
   r(ink, side ? 0 : 13, 12 + bob, 2, 5); r(dark, side ? 1 : 13, 13 + bob, 1, 3);
-  if (state === 'work') { r('#eed891', 12, 9 + frame % 2, 3, 3); r('#fff2b1', 13, 8 + frame % 2, 1, 5); }
+  if (['work', 'read', 'forge', 'gaze', 'train'].includes(state)) { r('#eed891', 12, 9 + frame % 2, 3, 3); r('#fff2b1', 13, 8 + frame % 2, 1, 5); }
   if (state === 'cheer') { r(light, 1, 7 + bob, 2, 2); r(light, 13, 7 + bob, 2, 2); }
 }

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emptySnapshot, reduceEvent, sanitizeEvent, tickSnapshot } from '../src/shared/reducer';
 import type { VillageEvent } from '../src/shared/types';
-import { COMPANION_RETURN_MS, DEPARTURE_MS } from '../src/shared/types';
+import { COMPANION_RETURN_MS, DEPARTURE_MS, STALE_SESSION_MS } from '../src/shared/types';
 const event = (hook_event_name: string, rest: Partial<VillageEvent> = {}): VillageEvent => ({ hook_event_name, session_id: 'session', ...rest });
 test('parallel completion, duplicate starts and reordered completion preserve work', () => {
   let state = emptySnapshot();
@@ -123,4 +123,33 @@ test('legacy sleeping completed companions migrate to departure while stopped ma
   state = tickSnapshot(state, 100000);
   assert.equal(state.actors['session::old'].activity, 'leaving');
   assert.equal(state.actors.session.activity, 'sleeping');
+});
+
+test('completion and permission state survive activity history eviction', () => {
+  let state = reduceEvent(emptySnapshot(), event('PreToolUse', { tool_use_id: 'blocked', tool_name: 'Bash' }), 0);
+  state = reduceEvent(state, event('PermissionRequest', { tool_use_id: 'blocked' }), 1);
+  for (let i = 0; i < 350; i++) state = reduceEvent(state, event('Notification', { notification_type: 'unrelated' }), i + 2);
+  assert.equal(state.journal.length, 300);
+  assert.equal(state.actors.session.activity, 'waiting');
+  state = reduceEvent(state, event('PostToolUse', { tool_use_id: 'blocked' }), 400);
+  assert.equal(state.actors.session.activity, 'thinking');
+  for (let i = 0; i < 350; i++) state = reduceEvent(state, event('Notification'), i + 401);
+  state = reduceEvent(state, event('PreToolUse', { tool_use_id: 'blocked', tool_name: 'Bash' }), 900);
+  assert.deepEqual(state.actors.session.activeTools, {});
+});
+
+test('stale activity is visible without discarding running tools and clears on a new event', () => {
+  let state = reduceEvent(emptySnapshot(), event('PreToolUse', { tool_use_id: 'slow', tool_name: 'Read' }), 100);
+  state = tickSnapshot(state, STALE_SESSION_MS + 100);
+  assert.equal(state.actors.session.stale, true);
+  assert.deepEqual(state.actors.session.activeTools, { slow: 'Read' });
+  state = reduceEvent(state, event('PostToolUse', { tool_use_id: 'slow' }), STALE_SESSION_MS + 101);
+  assert.equal(state.actors.session.stale, false);
+  assert.deepEqual(state.actors.session.activeTools, {});
+});
+
+test('only completed quests grow the decorative village progress', () => {
+  let state = emptySnapshot();
+  for (const name of ['SessionStart', 'Stop', 'UserPromptSubmit', 'TaskCompleted', 'TaskCompleted']) state = reduceEvent(state, event(name), state.sequence);
+  assert.equal(state.completedQuests, 2);
 });

@@ -1,6 +1,6 @@
 {
   "name": "claude-pixel-village",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,11 +8,17 @@
     "build": "tsc --noEmit && vite build",
     "start": "tsx src/server/index.ts",
     "test": "tsx --test tests/*.test.ts",
-    "hooks:generate": "node scripts/generate-hooks.mjs",
-    "hooks:install": "node scripts/install-hooks.mjs",
-    "hooks:check": "node scripts/check-hooks.mjs",
+    "hooks:uninstall": "node scripts/uninstall-hooks.mjs",
+    "mod:prepare": "node scripts/prepare-mod.mjs",
     "demo:replay": "node scripts/replay-demo.mjs"
   },
-  "dependencies": { "phaser": "^3.90.0" },
-  "devDependencies": { "@types/node": "^24.0.0", "tsx": "^4.20.0", "typescript": "^5.9.0", "vite": "^7.0.0" }
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
+  }
 }
