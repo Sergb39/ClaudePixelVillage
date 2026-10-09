@@ -22,9 +22,10 @@ const box = (c: CanvasRenderingContext2D, color: string, x: number, y: number, w
 const palette = { ink: '#365449', grass: '#86b873', light: '#a2c987', dark: '#6aa66a', path: '#dec793', edge: '#c4b27f', cream: '#f6dfac', wood: '#9a6949', roof: '#738f9b' };
 
 /** Original village art: tiny square brush strokes, no external image assets. */
-export function drawVillage(scene: Phaser.Scene): { blocked: Set<string>; ambient: Phaser.GameObjects.GameObject[] } {
+export function drawVillage(scene: Phaser.Scene): { blocked: Set<string>; ambient: Phaser.GameObjects.GameObject[]; trees: Phaser.GameObjects.Image[] } {
   const blocked = new Set<string>();
   const ambient: Phaser.GameObjects.GameObject[] = [];
+  const trees: Phaser.GameObjects.Image[] = [];
   let serial = 0;
   const texture = (name: string, w: number, h: number, paint: Paint) => {
     const key = `village-${name}-${serial++}`;
@@ -171,7 +172,7 @@ export function drawVillage(scene: Phaser.Scene): { blocked: Set<string>; ambien
     box(c, '#76a76b', 20, 26, 14, 8); box(c, '#76a76b', 28, 12, 10, 10); box(c, '#619a61', 14, 38, 20, 10); box(c, '#619a61', 34, 44, 20, 10);
     box(c, '#9abd7b', 24, 26, 6, 4);
   });
-  const tree = (x: number, y: number) => { scene.add.image(x,y,treeTexture).setOrigin(.5,1).setDepth(y); block(x-12,y-20,24,20); };
+  const tree = (x: number, y: number) => { trees.push(scene.add.image(x,y,treeTexture).setOrigin(.5,1).setDepth(y)); block(x-12,y-20,24,20); };
   for (let x=26;x<960;x+=52) tree(x, 82+(x%3)*4);
   for (let y=154;y<640;y+=76) { tree(20,y); tree(942,y+16); }
   [80, 304, 358, 620, 678, 878].forEach((x,i) => tree(x, i%2 ? 166 : 132));
@@ -193,5 +194,5 @@ export function drawVillage(scene: Phaser.Scene): { blocked: Set<string>; ambien
     scene.add.text(station.x, labelY, station.label, { fontFamily: 'monospace', fontSize: '9px', color: '#52664e', backgroundColor: '#e7d5a4', padding: { x: 4, y: 2 } }).setOrigin(.5).setDepth(-900);
     blocked.delete(`${Math.floor(station.x/TILE)},${Math.floor(station.y/TILE)}`);
   }
-  return { blocked, ambient };
+  return { blocked, ambient, trees };
 }

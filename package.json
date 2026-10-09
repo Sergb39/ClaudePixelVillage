@@ -8,14 +8,17 @@
     "build": "tsc --noEmit && vite build",
     "start": "tsx src/server/index.ts",
     "test": "tsx --test tests/*.test.ts",
+    "test:browser": "playwright test",
     "hooks:uninstall": "node scripts/uninstall-hooks.mjs",
     "mod:prepare": "node scripts/prepare-mod.mjs",
+    "setup": "node scripts/setup.mjs",
     "demo:replay": "node scripts/replay-demo.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@types/node": "^24.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",

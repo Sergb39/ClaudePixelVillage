@@ -20,7 +20,7 @@ export function animationKey(prefix: string, state: ActorAnimation, facing: Acto
 /** Original pixel templates, authored directly at native resolution. Feet anchor: (width/2,height). */
 export function createActorTextures(scene: Phaser.Scene, palette: number, kind: 'hero' | 'companion', look = 0, role: AgentRole = 'general'): string {
   const index = ((Math.floor(palette) % palettes.length) + palettes.length) % palettes.length;
-  const variant = Math.max(0, Math.min(3, Math.floor(look) || 0));
+  const variant = Math.max(0, Math.min(5, Math.floor(look) || 0));
   const prefix = `actor-${kind}-${index}-${variant}-${kind === 'companion' ? role : 'lead'}`;
   if (scene.textures.exists(prefix)) return prefix;
   const width = kind === 'hero' ? 24 : 16;
@@ -74,7 +74,7 @@ function painter(context: CanvasRenderingContext2D) {
 
 function drawHero(context: CanvasRenderingContext2D, colors: string[], state: ActorAnimation, direction: ActorFacing, frame: number, look: number) {
   const r = painter(context);
-  const [coat, light, dark] = look === 3 ? ['#4e986d', '#a9d685', '#345d49'] : colors as [string, string, string];
+  const [coat, light, dark] = look === 3 ? ['#4e986d', '#a9d685', '#345d49'] : look === 4 ? ['#6575ad', '#d9c9ee', '#3c4a79'] : colors as [string, string, string];
   const skin = '#efbf91';
   const hair = '#79523b';
   const side = direction === 'left' || direction === 'right';
@@ -119,6 +119,7 @@ function drawHero(context: CanvasRenderingContext2D, colors: string[], state: Ac
   if (look === 1) { r('#735239', 5, 7 + bob, 15, 3); r(light, 10, 4 + bob, 7, 3); }
   if (look === 2) { r('#72a46d', 5, 7 + bob, 15, 3); r('#f4b5c3', 8, 4 + bob, 3, 3); r('#e6df8c', 15, 3 + bob, 3, 3); }
   if (look === 3) { r('#355d45', 5, 8 + bob, 15, 3); r('#73b779', 7, 4 + bob, 13, 5); r('#73b779', 15, 2 + bob, 7, 4); r('#a8ce89', 18, 2 + bob, 3, 2); r('#bd8b51', 2, 20 + bob, 3, 8); }
+  if (look === 4) { r('#eee1b6', 5, 8 + bob, 15, 2); r('#607bb0', 7, 2 + bob, 12, 7); r('#dacbf0', 16, 1 + bob, 5, 3); r('#f5dda3', 3, 19 + bob, 3, 3); r('#f5dda3', 20, 18 + bob, 3, 3); }
   if (state === 'read') { r(ink, 2, 19, 11, 8); r('#f2e6bf', 3, 20, 9, 6); r('#d3a96d', 7, 20, 1, 6); }
   if (state === 'forge') { r('#f4ae53', 2 + frame % 2, 14, 3, 4); r('#ffe4a2', 3 + frame % 2, 13, 1, 3); }
   if (state === 'gaze') { r('#b6d7db', 18, 17, 5, 3); r(ink, 20, 16, 2, 10); r('#f6e9af', 21, 12 + frame % 2, 2, 2); }
@@ -127,7 +128,7 @@ function drawHero(context: CanvasRenderingContext2D, colors: string[], state: Ac
 
 function drawCompanion(context: CanvasRenderingContext2D, colors: string[], state: ActorAnimation, direction: ActorFacing, frame: number, look: number, role: AgentRole) {
   const r = painter(context);
-  const [fur, light, dark] = look === 3 ? ['#e0b85e', '#fff0ac', '#956d53'] : colors as [string, string, string];
+  const [fur, light, dark] = look === 3 ? ['#e0b85e', '#fff0ac', '#956d53'] : look === 4 ? ['#91b787', '#d9ebac', '#536e68'] : look === 5 ? ['#8d95bf', '#efe2c6', '#505776'] : colors as [string, string, string];
   if (direction === 'left') { context.translate(16, 0); context.scale(-1, 1); }
   if (state === 'sleep') {
     r(ink, 2, 12, 12, 7); r(fur, 3, 13, 10, 5); r(light, 4, 14, 6, 3);
@@ -144,11 +145,14 @@ function drawCompanion(context: CanvasRenderingContext2D, colors: string[], stat
   if (look === 1) { r(ink, 1, 3 + bob, 5, 6); r(ink, 10, 2 + bob, 5, 7); r(dark, 2, 4 + bob, 3, 4); r(dark, 11, 3 + bob, 3, 5); }
   else if (look === 2) { r(ink, 2, 2 + bob, 4, 7); r(ink, 10, 2 + bob, 4, 7); r(light, 3, 3 + bob, 2, 4); r(light, 11, 3 + bob, 2, 4); }
   else if (look === 3) { r(ink, 3, 0 + bob, 2, 8); r(ink, 11, 1 + bob, 2, 7); r('#ffe4a0', 3, 1 + bob, 2, 6); r('#ffe4a0', 11, 2 + bob, 2, 5); }
+  else if (look === 4) { r(ink, 3, 0 + bob, 3, 8); r(ink, 10, 0 + bob, 3, 8); r(light, 4, 1 + bob, 1, 6); r(light, 11, 1 + bob, 1, 6); }
+  else if (look === 5) { r(ink, 2, 5 + bob, 4, 4); r(ink, 10, 5 + bob, 4, 4); r(light, 3, 6 + bob, 2, 2); r(light, 11, 6 + bob, 2, 2); }
   else { r(ink, 3, 3 + bob, 3, 6); r(ink, 10, 2 + bob, 3, 7); }
   r(light, 4, 4 + bob, 1, 4); r(light, 11, 3 + bob, 1, 5);
   r(ink, 3, 7 + bob, 10, 10); r(ink, 2, 9 + bob, 12, 6);
   r(fur, 4, 7 + bob, 8, 10); r(fur, 3, 9 + bob, 10, 6);
   r(light, 4, 11 + bob, 8, 5);
+  if (look === 5) { r(light, 3, 10 + bob, 4, 5); r(light, 9, 10 + bob, 4, 5); r('#e5a866', 7, 12 + bob, 2, 3); }
   if (direction === 'up') {
     r(dark, 5, 8 + bob, 6, 1); r(light, 6, 14 + bob, 4, 2);
   } else {

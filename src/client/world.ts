@@ -21,6 +21,9 @@ export class VillageScene extends Phaser.Scene {
   onReady: () => void = () => {};
   private portraitCache = new Map<string, string>();
   private ambient: Phaser.GameObjects.GameObject[] = [];
+  private trees: Phaser.GameObjects.Image[] = [];
+  private seasonDecorations: Phaser.GameObjects.Rectangle[] = [];
+  private season: 'spring' | 'autumn' | 'winter' = 'spring';
   private nightOverlay?: Phaser.GameObjects.Rectangle;
   private night = false;
   private milestoneMarkers: Phaser.GameObjects.Container[] = [];
@@ -31,6 +34,8 @@ export class VillageScene extends Phaser.Scene {
     // Keep feet out of the flame; residents gather in a ring around it.
     for (const tile of ['13,16', '14,16', '14,17']) this.blocked.add(tile);
     this.ambient = village.ambient;
+    this.trees = village.trees;
+    this.setSeason(this.season);
     this.cameras.main.setBackgroundColor('#b8ce8a');
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.addAmbient();
@@ -41,8 +46,12 @@ export class VillageScene extends Phaser.Scene {
     this.onReady();
   }
   sync(snapshot: Snapshot) {
+    const earlierQuests = this.latest?.completedQuests;
     this.latest = snapshot; if (!this.ready) return;
     this.updateMilestones(snapshot.completedQuests ?? 0);
+    if (earlierQuests !== undefined && (snapshot.completedQuests ?? 0) > earlierQuests) {
+      for (let i = 0; i < Math.min(3, (snapshot.completedQuests ?? 0) - earlierQuests); i++) this.sparkle(460 + i * 20, 330 - i * 13, '✦');
+    }
     for (const [id, data] of Object.entries(snapshot.actors)) {
       let resident = this.residents.get(id);
       // Historical departures must not briefly respawn at the gate on refresh.
@@ -160,6 +169,20 @@ export class VillageScene extends Phaser.Scene {
   }
   select(id?: string) { this.selectedId = id; }
   setNight(value: boolean) { this.night = value; this.nightOverlay?.setVisible(value); }
+  setSeason(value: 'spring' | 'autumn' | 'winter') {
+    this.season = value;
+    if (!this.ready && !this.trees.length) return;
+    for (const tree of this.trees) { if (value === 'spring') tree.clearTint(); else tree.setTint(value === 'autumn' ? 0xd6a16a : 0xd3e2e6); }
+    for (const decoration of this.seasonDecorations) decoration.destroy();
+    this.seasonDecorations = [];
+    if (value === 'spring') return;
+    for (let i = 0; i < 90; i++) {
+      const x = 28 + (i * 317) % 906, y = 90 + (i * 179) % 500;
+      if (x > 120 && x < 850 && y > 205 && y < 560 && (x % 7) < 4) continue;
+      const color = value === 'winter' ? 0xf3faf5 : [0xe7ae62, 0xca765b, 0xe7d38c][i % 3];
+      this.seasonDecorations.push(this.add.rectangle(x, y, value === 'winter' ? 5 : 4, value === 'winter' ? 3 : 4, color, .85).setDepth(-900));
+    }
+  }
   private updateMilestones(completed: number) {
     const count = Math.min(6, Math.floor(completed / 3));
     while (this.milestoneMarkers.length < count) {
