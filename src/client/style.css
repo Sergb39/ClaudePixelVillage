@@ -21,3 +21,33 @@
 .setting-check{display:inline-flex;align-items:center;gap:7px;margin:5px 14px 5px 0;font-size:11px;color:#526453;cursor:pointer}
 .setting-check input{accent-color:#59764a}
 @media(max-width:600px){.customize{grid-template-columns:1fr}.attention{font-size:10px}}
+
+/* Companion roles */
+.resident-info .role-line{font-size:9px;font-weight:700;letter-spacing:.02em;color:#84628b;margin-bottom:3px}
+.story-controls{flex-wrap:wrap}
+.agent-role-select{min-width:145px}
+@media(max-width:600px){.agent-role-select{min-width:0;width:100%}}
+
+/* Full-tab village view */
+.world-header .weather{margin-left:auto}
+.full-tab-toggle{border:1px solid #d2dac6;background:#fffdf4;border-radius:5px;color:#546c48;padding:6px 9px;font:10px var(--mono);white-space:nowrap}
+.full-tab-toggle:hover{background:#e8efd9}
+.full-tab-toggle span{margin-left:5px}
+body.village-full-tab{overflow:hidden}
+.world-panel.is-full-tab{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;width:100%;height:100dvh;border:0;border-radius:0;box-shadow:none}
+.world-panel.is-full-tab .world-frame{flex:1;min-height:0;aspect-ratio:auto}
+.world-panel.is-full-tab #game canvas{width:min(100vw,calc((100dvh - 86px)*1.5))!important;height:auto!important;max-width:100%;max-height:100%;object-fit:contain}
+.world-panel.is-full-tab .world-legend{min-height:39px;background:#fbfcf4}
+@media(max-width:600px){.full-tab-toggle span{display:none}.world-panel.is-full-tab .full-tab-toggle span{display:inline}.world-panel.is-full-tab .world-caption>span:first-child{font-size:9px}}
+
+/* Live resident HUD, journal replay, and seasonal controls */
+.resident-hud{display:none}
+.world-panel.is-full-tab .resident-hud{position:absolute;left:14px;bottom:14px;z-index:4;display:grid;gap:4px;max-width:min(235px,52vw);padding:11px 13px;border:1px solid #78905f88;border-radius:8px;background:#fffce9ec;box-shadow:0 4px 16px #223d3040;color:#35543b;font-size:11px}
+.resident-hud .hud-eyebrow{font:8px var(--mono);letter-spacing:1px;color:#83976d}
+.resident-hud strong{font-size:13px}.resident-hud small{font-size:10px}.resident-hud label{font-size:9px;display:grid;gap:3px;margin-top:4px}.resident-hud select{padding:5px 20px 5px 6px;font-size:10px;width:100%}
+.replay-bar{display:flex;align-items:center;gap:8px;min-height:43px;padding:6px 14px;border-top:1px solid #dce2cf;background:#f5f7ec;color:#65765b;font:10px var(--mono)}
+.replay-bar button,.replay-bar select{border:1px solid #cbd8ba;background:#fffdf6;color:#4b6448;border-radius:5px;padding:6px 9px;font:10px var(--mono);white-space:nowrap}
+.replay-bar [hidden]{display:none!important}.replay-bar label{display:flex;align-items:center;gap:6px;flex:1;min-width:70px}.replay-bar input{width:100%;accent-color:#66894c}.replay-bar #replay-caption{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.replay-bar #replay-live{margin-left:auto}
+.world-panel.is-full-tab #game canvas{width:min(100vw,calc((100dvh - 136px)*1.5))!important}
+.preferences-section .setting-check select{padding:4px 22px 4px 6px;font-size:10px}
+@media(max-width:600px){.world-panel.is-full-tab .resident-hud{max-width:54vw;font-size:10px;bottom:8px;left:8px;padding:8px}.replay-bar{gap:5px;padding:5px 8px;flex-wrap:wrap}.replay-bar button,.replay-bar select{padding:5px 6px}.replay-bar #replay-caption{flex-basis:100%;order:2;font-size:9px}.replay-bar label{min-width:68px}}

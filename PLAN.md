@@ -20,9 +20,9 @@ Only metadata needed for identity and activity is retained. Prompts, source code
 
 ## Visual model
 
-`src/client/scenery.ts` draws the original top-down village and its walkability grid. `src/client/navigation.ts` routes around solid props. `src/client/world.ts` assigns station slots, animates residents, gives each station a distinct action, provides selection/zoom, draws earned decorative banners, and applies an optional night overlay. `src/client/sprites.ts` generates pixel adventurers and companions from code-native templates, palettes, and look variants. The sidebar is ordinary HTML for accessible status, search, attention, timeline, and controls. Custom names, looks, night mode and gentle sounds are browser-local preferences.
+`src/client/scenery.ts` draws the original top-down village and its walkability grid. `src/client/navigation.ts` routes around solid props. `src/client/world.ts` assigns station slots, animates residents, gives each station a distinct action, provides selection/zoom, draws earned decorative banners and task-completion sparkles, and applies optional night and seasonal scenery. `src/shared/roles.ts` maps Claude `agent_type` metadata to designer, developer, project manager, explorer, planner, tester, or general companion identity. `src/client/sprites.ts` generates pixel adventurers and companions from code-native templates, palettes, role accessories, and look variants. A late agent type can upgrade a general companion without resetting its work. The sidebar is ordinary HTML for accessible status, search, attention, timeline, and controls. Full-tab mode adds a compact accessible resident HUD. Custom names, looks, night mode, season and gentle sounds are browser-local preferences.
 
-The world uses nearest-neighbor rendering and a fixed feet anchor. Reduced motion follows the browser preference and can be toggled on the map. Crowded stations spread residents in rings; occupancy and pathfinding should be checked together when adding props or stations.
+The world uses nearest-neighbor rendering and a fixed feet anchor. The full-tab toggle expands the existing scene without recreating it; the canvas keeps its 3:2 proportions and the button or Escape returns to the dashboard. `src/shared/replay.ts` reconstructs state from the retained sanitized journal without affecting the live receiver; live snapshots continue in the background and replace replay when the viewer selects Live. Replay may be partial when older events were evicted. Reduced motion follows the browser preference and can be toggled on the map. Crowded stations spread residents in rings; occupancy and pathfinding should be checked together when adding props or stations.
 
 ## Project boundaries
 
@@ -34,6 +34,7 @@ The village depicts events it can observe; it does not infer Claude's private th
 npm test
 npm run build
 npm run mod:prepare
+npm run test:browser
 claude plugin validate ./mod
 claude plugin test ./mod
 ```

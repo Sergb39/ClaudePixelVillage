@@ -1,4 +1,5 @@
 import { actorKey, COMPANION_RETURN_MS, DEPARTURE_MS, STALE_SESSION_MS, type ActorState, type Snapshot, type Station, type VillageEvent } from './types';
+import { agentRole, ROLE_NAMES, ROLE_PALETTES } from './roles';
 
 export const emptySnapshot = (): Snapshot => ({ sequence: 0, actors: {}, journal: [], completedQuests: 0 });
 export function sanitizeEvent(input: unknown): VillageEvent | null {
@@ -24,9 +25,10 @@ function hero(sessionId: string, now: number, agentId?: string, agentType?: stri
   const companionNames = ['Sprout', 'Pip', 'Moss', 'Pebble'];
   const demoName = sessionId.startsWith('demo-') ? names.find(name => name.toLowerCase() === sessionId.slice(5).split('-')[0].toLowerCase()) : undefined;
   const companionHash = stableHash(agentId ?? '');
-  const typeNames: Record<string, string> = { explore: 'Scout', plan: 'Sage', 'general-purpose': 'Sprout' };
-  const name = agentId ? `${typeNames[agentType?.toLowerCase() ?? ''] ?? companionNames[companionHash % companionNames.length]} ${companionHash.toString(36).slice(-4).padStart(4, '0')}` : demoName ?? names[hash % names.length];
-  return { id: actorKey(sessionId, agentId), sessionId, ...(agentId ? { agentId } : {}), name, kind: agentId ? 'companion' : 'hero', palette: hash % 8, activity: 'arriving', station: 'gate', activeTools: {}, completedTools: {}, lastEvent: 'SessionStart', updatedAt: now, lastObservedAt: now };
+  const role = agentId ? agentRole(agentType) : 'lead';
+  const prefix = role === 'general' && agentId ? companionNames[companionHash % companionNames.length] : ROLE_NAMES[role];
+  const name = agentId ? `${prefix} ${String(companionHash % 1000).padStart(3, '0')}` : demoName ?? names[hash % names.length];
+  return { id: actorKey(sessionId, agentId), sessionId, ...(agentId ? { agentId } : {}), name, kind: agentId ? 'companion' : 'hero', role, palette: agentId && role !== 'general' ? ROLE_PALETTES[role] : hash % 8, activity: 'arriving', station: 'gate', activeTools: {}, completedTools: {}, lastEvent: 'SessionStart', updatedAt: now, lastObservedAt: now };
 }
 /** Tool completion and permission state live on the actor, independent of the display journal. */
 export function reduceEvent(state: Snapshot, event: VillageEvent, now = Date.now()): Snapshot {
@@ -69,6 +71,10 @@ export function reduceEvent(state: Snapshot, event: VillageEvent, now = Date.now
   if (!actors[mainKey]) actors[mainKey] = hero(event.session_id, now);
   const previous = actors[key] ?? hero(event.session_id, now, event.agent_id, event.agent_type);
   const actor = { ...previous, activeTools: { ...previous.activeTools }, completedTools: { ...previous.completedTools }, lastEvent: event.hook_event_name, updatedAt: now, lastObservedAt: now, stale: false };
+  if (event.agent_id && event.agent_type && agentRole(event.agent_type) !== 'general' && (previous.role === 'general' || !previous.role)) {
+    const upgraded = hero(event.session_id, now, event.agent_id, event.agent_type);
+    actor.role = upgraded.role; actor.palette = upgraded.palette; actor.name = upgraded.name;
+  }
   if (sessionWake || event.hook_event_name === 'SubagentStart') actor.finishedAt = undefined;
   const set = (activity: ActorState['activity'], station: Station) => { actor.activity = activity; actor.station = station; };
   const toolId = event.tool_use_id ?? `uncorrelated:${event.tool_name ?? 'tool'}`;

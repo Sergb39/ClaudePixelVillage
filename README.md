@@ -23,7 +23,7 @@ For a built client, run `npm run build` and then `npm start`. Keep only one serv
 
 The [Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overview) observes local events and adds `/village` for connection status. It requires terminal Claude Code 2.1.287+ or Desktop Code 2.1.286+ in a local Code session. A cloud session cannot reach the local receiver.
 
-1. In this repository, run `npm run mod:prepare`. It prints an absolute marketplace path for this computer.
+1. In this repository, run `npm run setup`. It prepares the mod, checks the receiver, token and Claude CLI, and prints an absolute marketplace path for this computer. If the receiver is not running, start `npm run dev` in another terminal and rerun the check.
 2. Keep `npm run dev` (or `npm start`) running, then use these commands in Claude Code, replacing the path with the one printed above:
 
    ```text
@@ -56,9 +56,9 @@ For mod development, `claude --plugin-dir ./mod` loads source directly for one s
 | Stop | Rests at the campfire, then sleeps |
 | SessionEnd | Adventurer and companions depart |
 
-Search residents by name, session ID, or tool. Select one for its active tools, last observed event, and a 12-event timeline. Give it a nickname or choose a hat/companion shape; these changes are saved in your browser. Night mode and gentle sounds are optional and saved there too. Every three observed `TaskCompleted` events add a decorative banner. Demo events count as demo progress and have no effect on Claude.
+Claude's spawned agents appear as role-specific companions when `agent_type` is available: designer, developer, project manager, explorer, planner, and tester each have their own color, name, and pixel accessories. Unknown types remain general companions. The demo role picker lets you try the cast without starting real agents. Search residents by name, role, session ID, or tool. Select one for its active tools, last observed event, and a 12-event timeline. Give it a nickname or choose a hat/companion shape, including an original forest ranger, star traveler, spark critter, moss bunny, or moon owl; these choices are saved in your browser. Night mode, spring/autumn/winter scenery, and gentle sounds are optional and saved there too. Each observed `TaskCompleted` event adds a brief sparkle, and every three add a decorative banner. Demo events count as demo progress and have no effect on Claude.
 
-A status becomes **No recent event** after five minutes without an event while a resident appears active. This flags uncertainty: it does not claim the tool failed or the session ended. A new event clears the flag. The attention list also shows permission waits and interrupted work. Work may be parallel; each tool remains listed until its own completion event arrives.
+Use **Full tab** in the village header to expand the animated map across the browser tab. Click a figure or use the resident selector in the full-tab HUD to see its role, activity, and active tool. The same button or **Esc** returns to the dashboard. **Replay** steps through the retained sanitized event journal; use the slider or play/speed controls, then select **Live** to catch up. It reconstructs available metadata only, so old events beyond the 300-event journal and private reasoning cannot appear. A status becomes **No recent event** after five minutes without an event while a resident appears active. This flags uncertainty: it does not claim the tool failed or the session ended. A new event clears the flag. The attention list also shows permission waits and interrupted work. Work may be parallel; each tool remains listed until its own completion event arrives.
 
 Animations are interpretations of hook metadata, not observations of Claude's private reasoning. The timeline keeps the last 300 sanitized events for the whole village, so older entries disappear. The actor's tool and permission state is independent of that display history. Standard events do not provide a reliable nested parent tree, so companions belong to their session adventurer.
 
@@ -81,9 +81,10 @@ npm ci
 npm test
 npm run build
 npm run mod:prepare
+npm run test:browser
 ```
 
-Tests cover lifecycle, parallel and reordered tools, high-volume history eviction, stale activity, persistence, local authentication, path protection, navigation, mod packaging, queue/retry behavior, and legacy migration. For a native Claude validator check, run `claude plugin validate ./mod` and `claude plugin test ./mod` with a supported Claude Code version. A successful validator is separate from a real event-delivery check; use `/village` and a fresh local session for that.
+Unit tests cover lifecycle, replay reconstruction, parallel and reordered tools, high-volume history eviction, stale activity, persistence, local authentication, path protection, navigation, mod packaging, queue/retry behavior, and legacy migration. Browser tests cover the full-tab HUD, replay controls, mobile layout, and season persistence; install Chromium once with `npx playwright install chromium` before `npm run test:browser`. CI installs it automatically. For a native Claude validator check, run `claude plugin validate ./mod` and `claude plugin test ./mod` with a supported Claude Code version. A successful validator is separate from a real event-delivery check; use `/village` and a fresh local session for that.
 
 `npm run demo:replay` replays the sample story. `npm run demo:replay -- path/to/snapshot.json` replays a sanitized journal under new `demo-replay-*` IDs. Clear demo residents from the browser afterward.
 
