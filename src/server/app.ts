@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from '
 import { resolve, extname, sep } from 'node:path';
 import { emptySnapshot, reduceEvent, sanitizeEvent, tickSnapshot } from '../shared/reducer';
 import type { ActorState, Snapshot } from '../shared/types';
+import { isAgentRole } from '../shared/roles';
 
 export function createVillageServer(options: { root?: string; port?: number; middleware?: (req: IncomingMessage, res: ServerResponse, next: () => void) => void } = {}) {
   const root = options.root ?? process.cwd(); const port = options.port ?? 4317;
@@ -25,7 +26,9 @@ export function createVillageServer(options: { root?: string; port?: number; mid
       const rebuilt = reduceEvent(emptySnapshot(), event);
       const id = event.session_id + (event.agent_id ? `::${event.agent_id}` : '');
       const clean = rebuilt.actors[id];
-      if (typeof actor.name === 'string' && /^(Sprout|Pip|Moss|Pebble|Scout|Sage) [a-z0-9]{4}$/.test(actor.name)) clean.name = actor.name;
+      if (typeof actor.name === 'string' && /^(Sprout|Pip|Moss|Pebble|Scout|Sage|Muse|Tinker|Steward|Glint) [a-z0-9]{4}$/.test(actor.name)) clean.name = actor.name;
+      if (isAgentRole(actor.role) && (actor.agentId || actor.role === 'lead')) clean.role = actor.role;
+      if (Number.isInteger(actor.palette) && actor.palette >= 0 && actor.palette < 8) clean.palette = actor.palette;
       if (activities.includes(actor.activity)) clean.activity = actor.activity;
       if (stations.includes(actor.station)) clean.station = actor.station;
       clean.updatedAt = Number.isFinite(actor.updatedAt) ? actor.updatedAt : Date.now();

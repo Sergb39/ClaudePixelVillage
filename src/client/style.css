@@ -21,3 +21,9 @@
 .setting-check{display:inline-flex;align-items:center;gap:7px;margin:5px 14px 5px 0;font-size:11px;color:#526453;cursor:pointer}
 .setting-check input{accent-color:#59764a}
 @media(max-width:600px){.customize{grid-template-columns:1fr}.attention{font-size:10px}}
+
+/* Companion roles */
+.resident-info .role-line{font-size:9px;font-weight:700;letter-spacing:.02em;color:#84628b;margin-bottom:3px}
+.story-controls{flex-wrap:wrap}
+.agent-role-select{min-width:145px}
+@media(max-width:600px){.agent-role-select{min-width:0;width:100%}}

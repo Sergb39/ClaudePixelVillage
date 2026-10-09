@@ -52,7 +52,7 @@ export class VillageScene extends Phaser.Scene {
       const oldActivity = resident.data.activity;
       const changed = oldEvent !== data.lastEvent || oldUpdated !== data.updatedAt;
       resident.data = data;
-      const prefix = createActorTextures(this, data.palette, data.kind, data.look);
+      const prefix = createActorTextures(this, data.palette, data.kind, data.look, data.role);
       if (resident.prefix !== prefix) { resident.prefix = prefix; resident.sprite.setTexture(prefix); resident.animation = ''; }
       if (data.activity === 'leaving') resident.deliverUntil = 0;
       if (changed) {
@@ -69,7 +69,7 @@ export class VillageScene extends Phaser.Scene {
     }
   }
   private spawn(data: ActorState): Resident {
-    const prefix = createActorTextures(this, data.palette, data.kind, data.look);
+    const prefix = createActorTextures(this, data.palette, data.kind, data.look, data.role);
     const birth = stations.gate;
     const offset = ((this.hash(data.id) % 5) - 2) * 15;
     const container = this.add.container(birth.x + offset, birth.y);
@@ -189,7 +189,7 @@ export class VillageScene extends Phaser.Scene {
   }
   portrait(data: ActorState): string {
     if (!this.ready) return '';
-    const prefix = createActorTextures(this, data.palette, data.kind, data.look); const cached = this.portraitCache.get(prefix); if (cached) return cached;
+    const prefix = createActorTextures(this, data.palette, data.kind, data.look, data.role); const cached = this.portraitCache.get(prefix); if (cached) return cached;
     const width = data.kind === 'hero' ? 24 : 16; const height = data.kind === 'hero' ? 32 : 20;
     const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
     const source = this.textures.get(prefix).getSourceImage() as HTMLCanvasElement;

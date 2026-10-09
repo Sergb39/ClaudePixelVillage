@@ -9,7 +9,7 @@ import { emptySnapshot, reduceEvent } from '../src/shared/reducer';
 test('saved companions and closed identities survive server restoration', async () => {
   const root = mkdtempSync(join(tmpdir(), 'village-restore-')); const port = 14319;
   let state = reduceEvent(emptySnapshot(), { hook_event_name: 'SessionStart', session_id: 'saved' });
-  state = reduceEvent(state, { hook_event_name: 'SubagentStart', session_id: 'saved', agent_id: 'child' });
+  state = reduceEvent(state, { hook_event_name: 'SubagentStart', session_id: 'saved', agent_id: 'child', agent_type: 'project-manager' });
   state = reduceEvent(state, { hook_event_name: 'SubagentStop', session_id: 'saved', agent_id: 'child' });
   state = reduceEvent(state, { hook_event_name: 'PreToolUse', session_id: 'saved', tool_use_id: 'finished', tool_name: 'Read' });
   state = reduceEvent(state, { hook_event_name: 'PostToolUse', session_id: 'saved', tool_use_id: 'finished' });
@@ -22,6 +22,8 @@ test('saved companions and closed identities survive server restoration', async 
   try {
     assert.equal(getState().actors.saved.kind, 'hero');
     assert.equal(getState().actors['saved::child'].kind, 'companion');
+    assert.equal(getState().actors['saved::child'].role, 'project-manager');
+    assert.equal(getState().actors['saved::child'].palette, 3);
     assert.equal(getState().actors['saved::child'].finishedAt, state.actors['saved::child'].finishedAt);
     assert.equal(getState().closedActors?.['saved::child'].event, 'SubagentStop');
     assert.equal(getState().actors.saved.pendingWait, 'approval');

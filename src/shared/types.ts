@@ -1,5 +1,6 @@
 export type Activity = 'arriving' | 'thinking' | 'working' | 'waiting' | 'celebrating' | 'resting' | 'sleeping' | 'leaving' | 'interrupted';
 export type Station = 'gate' | 'board' | 'library' | 'forge' | 'observatory' | 'training' | 'campfire' | 'beds';
+export type AgentRole = 'lead' | 'designer' | 'developer' | 'project-manager' | 'explorer' | 'planner' | 'tester' | 'general';
 export interface VillageEvent {
   hook_event_name: string;
   session_id: string;
@@ -17,6 +18,7 @@ export interface ActorState {
   agentId?: string;
   name: string;
   kind: 'hero' | 'companion';
+  role: AgentRole;
   palette: number;
   look?: number;
   activity: Activity;

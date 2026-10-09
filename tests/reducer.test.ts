@@ -3,7 +3,20 @@ import assert from 'node:assert/strict';
 import { emptySnapshot, reduceEvent, sanitizeEvent, tickSnapshot } from '../src/shared/reducer';
 import type { VillageEvent } from '../src/shared/types';
 import { COMPANION_RETURN_MS, DEPARTURE_MS, STALE_SESSION_MS } from '../src/shared/types';
+import { agentRole } from '../src/shared/roles';
 const event = (hook_event_name: string, rest: Partial<VillageEvent> = {}): VillageEvent => ({ hook_event_name, session_id: 'session', ...rest });
+test('subagent types choose stable visual roles and later type metadata upgrades a working companion', () => {
+  for (const [type, role] of Object.entries({ 'ui-designer': 'designer', 'software-engineer': 'developer', build: 'developer', 'project-manager': 'project-manager', 'product_manager': 'project-manager', Explore: 'explorer', architect: 'planner', 'qa-reviewer': 'tester', custom: 'general' })) assert.equal(agentRole(type), role, type);
+  let state = reduceEvent(emptySnapshot(), event('PreToolUse', { agent_id: 'child', tool_use_id: 'edit', tool_name: 'Edit' }), 1);
+  assert.equal(state.actors.session.role, 'lead');
+  assert.equal(state.actors['session::child'].role, 'general');
+  state = reduceEvent(state, event('SubagentStart', { agent_id: 'child', agent_type: 'ui-designer' }), 2);
+  const child = state.actors['session::child'];
+  assert.equal(child.role, 'designer');
+  assert.match(child.name, /^Muse /);
+  assert.equal(child.palette, 2);
+  assert.deepEqual(child.activeTools, { edit: 'Edit' });
+});
 test('parallel completion, duplicate starts and reordered completion preserve work', () => {
   let state = emptySnapshot();
   for (const e of [event('SessionStart'), event('SessionStart'), event('PreToolUse', { tool_use_id: 'a', tool_name: 'Read' }), event('PreToolUse', { tool_use_id: 'b', tool_name: 'Edit' }), event('PostToolUse', { tool_use_id: 'a' }), event('PostToolUse', { tool_use_id: 'a' })]) state = reduceEvent(state, e, 100);

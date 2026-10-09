@@ -1,6 +1,7 @@
 import './style.css';
 import { createWorld } from './world';
 import { actorKey, type ActorState, type Snapshot, type VillageEvent } from '../shared/types';
+import { ROLE_LABELS } from '../shared/roles';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const escape = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
@@ -73,7 +74,7 @@ function render() {
   const orphaned = residents.filter(a => a.kind === 'companion' && !heroes.some(h => h.sessionId === a.sessionId));
   list.push(...orphaned);
   const query = $<HTMLInputElement>('resident-search').value.trim().toLowerCase();
-  const shown = query ? list.filter(a => [a.name, a.sessionId, a.toolName ?? '', ...Object.values(a.activeTools)].some(value => value.toLowerCase().includes(query))) : list;
+  const shown = query ? list.filter(a => [a.name, ROLE_LABELS[a.role ?? 'general'], a.sessionId, a.toolName ?? '', ...Object.values(a.activeTools)].some(value => value.toLowerCase().includes(query))) : list;
   const needsAttention = residents.filter(a => a.activity === 'waiting' || a.activity === 'interrupted' || a.stale);
   $('attention').innerHTML = needsAttention.length ? `<strong>${needsAttention.length} need a look</strong>${needsAttention.map(a => `<button data-attention="${escape(a.id)}">${escape(a.name)} · ${a.stale ? 'No recent event' : a.activity === 'waiting' ? 'Waiting for you' : 'Interrupted'}</button>`).join('')}` : '';
   $('attention').querySelectorAll<HTMLButtonElement>('[data-attention]').forEach(button => button.onclick = () => selectResident(button.dataset.attention!));
@@ -85,7 +86,7 @@ function render() {
   $('world-mode').textContent = onlyDemo && residents.length ? 'A LITTLE DEMO WORLD' : 'YOUR LOCAL VILLAGE';
   const cards = shown.map(actor => {
     const portrait = scene.portrait(actor);
-    return `<button class="resident-card ${actor.kind} ${actor.id === selectedId ? 'selected' : ''}" data-resident="${escape(actor.id)}" aria-pressed="${actor.id === selectedId}"><span class="portrait">${portrait ? `<img src="${portrait}" alt="" />` : '✦'}</span><span class="resident-info"><strong>${escape(actor.name)}</strong><small>${escape(actor.stale ? 'No recent event' : activityLabel[actor.activity])}</small></span><i class="resident-state ${actor.activity}" aria-hidden="true"></i></button>`;
+    return `<button class="resident-card ${actor.kind} ${actor.id === selectedId ? 'selected' : ''}" data-resident="${escape(actor.id)}" aria-pressed="${actor.id === selectedId}"><span class="portrait">${portrait ? `<img src="${portrait}" alt="" />` : '✦'}</span><span class="resident-info"><strong>${escape(actor.name)}</strong><small class="role-line">${escape(ROLE_LABELS[actor.role ?? 'general'])}</small><small>${escape(actor.stale ? 'No recent event' : activityLabel[actor.activity])}</small></span><i class="resident-state ${actor.activity}" aria-hidden="true"></i></button>`;
   }).join('');
   $('residents').innerHTML = cards || `<p class="empty-note">${query ? 'No residents match that search.' : 'It’s quiet here. Start a session or play a village day.'}</p>`;
   $('residents').querySelectorAll<HTMLButtonElement>('[data-resident]').forEach(button => button.onclick = () => selectResident(button.dataset.resident!));
@@ -96,7 +97,7 @@ function render() {
     const active = Object.keys(actor.activeTools).length;
     const description = actor.activity === 'waiting' ? 'A question is waiting for you. Your adventurer will continue when Claude receives your response.' : actor.activity === 'sleeping' ? 'The day’s work is done. A new prompt will wake this sleepy adventurer.' : actor.activity === 'working' ? `Making progress at the ${stationLabel[actor.station]}.${active > 1 ? ` ${active} tools are working together.` : ''}` : actor.activity === 'resting' ? 'A well-earned break. Soon the campfire stories will turn into dreams.' : actor.kind === 'companion' && actor.activity === 'celebrating' ? 'Bringing a little sparkle back to the main adventurer.' : `${activityLabel[actor.activity]} near the ${stationLabel[actor.station]}.`;
     const timeline = snapshot.journal.filter(e => e.session_id === actor.sessionId && e.agent_id === actor.agentId).slice(-12).reverse();
-    $('character-detail').innerHTML = `<div class="detail-top"><strong>${escape(actor.name)}’s story</strong><span class="detail-label">${actor.kind === 'hero' ? 'ADVENTURER' : 'COMPANION'}</span></div><p>${escape(actor.stale ? 'No recent event from Claude. This status may be out of date.' : description)}</p><p class="detail-meta">${actor.sessionId.startsWith('demo-') ? 'DEMO' : 'CLAUDE SESSION'} · ${actor.kind === 'hero' ? `${children} companion${children === 1 ? '' : 's'}` : escape(actor.agentId ?? '')} · last event ${age(actor.lastObservedAt ?? actor.updatedAt)} ago</p><div class="detail-tools"><strong>Active tools</strong>${Object.values(actor.activeTools).length ? `<ul>${Object.values(actor.activeTools).map(tool => `<li>${escape(tool)}</li>`).join('')}</ul>` : '<span>None</span>'}</div><div class="customize"><label>Nickname<input id="nickname" maxlength="24" value="${escape(settings.names[actor.id] ?? '')}" placeholder="${escape(actor.name)}" /></label><label>Look<select id="look-select">${(actor.kind === 'hero' ? ['Pointed cap', 'Explorer cap', 'Flower crown'] : ['Sprout', 'Fox', 'Cat']).map((label, index) => `<option value="${index}" ${actor.look === index ? 'selected' : ''}>${label}</option>`).join('')}</select></label></div><details class="timeline"><summary>Session timeline (${timeline.length})</summary>${timeline.map(e => `<div><time>${new Date(e.receivedAt).toLocaleTimeString()}</time> ${escape(eventDescription(e)[1])}</div>`).join('') || '<p>No events yet.</p>'}</details>`;
+    $('character-detail').innerHTML = `<div class="detail-top"><strong>${escape(actor.name)}’s story</strong><span class="detail-label">${escape(ROLE_LABELS[actor.role ?? 'general'])}</span></div><p>${escape(actor.stale ? 'No recent event from Claude. This status may be out of date.' : description)}</p><p class="detail-meta">${actor.sessionId.startsWith('demo-') ? 'DEMO' : 'CLAUDE SESSION'} · ${actor.kind === 'hero' ? `${children} companion${children === 1 ? '' : 's'}` : escape(actor.agentId ?? '')} · last event ${age(actor.lastObservedAt ?? actor.updatedAt)} ago</p><div class="detail-tools"><strong>Active tools</strong>${Object.values(actor.activeTools).length ? `<ul>${Object.values(actor.activeTools).map(tool => `<li>${escape(tool)}</li>`).join('')}</ul>` : '<span>None</span>'}</div><div class="customize"><label>Nickname<input id="nickname" maxlength="24" value="${escape(settings.names[actor.id] ?? '')}" placeholder="${escape(actor.name)}" /></label><label>Look<select id="look-select">${(actor.kind === 'hero' ? ['Pointed cap', 'Explorer cap', 'Flower crown', 'Forest ranger'] : ['Sprout', 'Fox', 'Cat', 'Spark critter']).map((label, index) => `<option value="${index}" ${actor.look === index ? 'selected' : ''}>${label}</option>`).join('')}</select></label></div><details class="timeline"><summary>Session timeline (${timeline.length})</summary>${timeline.map(e => `<div><time>${new Date(e.receivedAt).toLocaleTimeString()}</time> ${escape(eventDescription(e)[1])}</div>`).join('') || '<p>No events yet.</p>'}</details>`;
     $<HTMLInputElement>('nickname').oninput = event => { const value = (event.target as HTMLInputElement).value.trim().slice(0, 24); if (value) settings.names[actor.id] = value; else delete settings.names[actor.id]; saveSettings(); };
     $<HTMLInputElement>('nickname').onblur = () => useSnapshot(rawSnapshot);
     $<HTMLSelectElement>('look-select').onchange = event => { settings.looks[actor.id] = Number((event.target as HTMLSelectElement).value); saveSettings(); useSnapshot(rawSnapshot); };
@@ -143,7 +144,7 @@ async function action(name: string) {
   } else if (name === 'quest') { await startQuest(actor); toast('A new quest is underway.'); }
   else if (name === 'companion') {
     const id = `sprout-${++toolSerial}`;
-    await emit('SubagentStart', actor.sessionId, { agent_id: id, agent_type: 'explorer' });
+    await emit('SubagentStart', actor.sessionId, { agent_id: id, agent_type: $<HTMLSelectElement>('agent-role-select').value });
     await emit('PreToolUse', actor.sessionId, { agent_id: id, tool_name: tools[(questSerial++ + 1) % tools.length], tool_use_id: `demo-tool-${++toolSerial}` });
     toast('A little companion is off to help.');
   } else if (name === 'complete') { await complete(actor); toast('Time for a tiny celebration.'); }
@@ -157,7 +158,7 @@ actorSelect.onchange = () => { if (snapshot.actors[actorSelect.value]) selectRes
 $('send-hook').onclick = () => void (async () => {
   const actor = chosen(); const hook = hookSelect.value;
   let extras: Partial<VillageEvent> = { agent_id: actor.agentId };
-  if (hook === 'SubagentStart') extras = { agent_id: `pip-${++toolSerial}`, agent_type: 'helper' };
+  if (hook === 'SubagentStart') extras = { agent_id: `pip-${++toolSerial}`, agent_type: $<HTMLSelectElement>('agent-role-select').value };
   if (hook === 'SubagentStop' && !actor.agentId) { const companion = Object.values(snapshot.actors).find(a => a.sessionId === actor.sessionId && a.kind === 'companion'); if (!companion) { toast('Send a companion first, or select one from the list.'); return; } extras.agent_id = companion.agentId; }
   if (/ToolUse|Permission/.test(hook)) { const existing = Object.keys(actor.activeTools)[0]; extras.tool_name = $<HTMLSelectElement>('tool-select').value; extras.tool_use_id = hook === 'PreToolUse' ? `demo-tool-${++toolSerial}` : existing ?? `demo-tool-${++toolSerial}`; }
   if (hook === 'Notification') extras.notification_type = 'idle_prompt';
