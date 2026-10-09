@@ -9,6 +9,7 @@ const hookSelect = $<HTMLSelectElement>('hook-select');
 hookSelect.innerHTML = hookNames.map(name => `<option>${name}</option>`).join('');
 const actorSelect = $<HTMLSelectElement>('actor-select');
 let snapshot: Snapshot = { sequence: 0, actors: {}, journal: [] };
+let rawSnapshot: Snapshot = snapshot;
 let selectedId: string | undefined;
 let demoGeneration = 0;
 let toastTimer: ReturnType<typeof setTimeout>;
@@ -16,12 +17,28 @@ let toolSerial = Date.now();
 let newSerial = 0;
 let questSerial = 0;
 let lastSeed = false;
+type LocalSettings = { names: Record<string, string>; looks: Record<string, number>; night: boolean; sound: boolean };
+let settings: LocalSettings = { names: {}, looks: {}, night: false, sound: false };
+try { const saved = JSON.parse(localStorage.getItem('pixel-village-settings') ?? '{}'); settings = { ...settings, ...saved, names: saved.names && typeof saved.names === 'object' ? saved.names : {}, looks: saved.looks && typeof saved.looks === 'object' ? saved.looks : {} }; } catch { /* Browser storage may be unavailable. */ }
+const saveSettings = () => { try { localStorage.setItem('pixel-village-settings', JSON.stringify(settings)); } catch { toast('Browser storage is full or unavailable.'); } };
+let connected = false;
+let audioContext: AudioContext | undefined;
+function chime() {
+  if (!settings.sound) return;
+  audioContext ??= new AudioContext();
+  const oscillator = audioContext.createOscillator(); const gain = audioContext.createGain();
+  oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(660, audioContext.currentTime); oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + .12);
+  gain.gain.setValueAtTime(.025, audioContext.currentTime); gain.gain.exponentialRampToValueAtTime(.0001, audioContext.currentTime + .35);
+  oscillator.connect(gain).connect(audioContext.destination); oscillator.start(); oscillator.stop(audioContext.currentTime + .35);
+}
 const { scene, game } = createWorld();
 scene.onSelect = selectResident;
 scene.onReady = () => render();
 
 function toast(message: string) { $('toast').textContent = message; $('toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 3400); }
-function setConnection(connected: boolean) { const el = $('connection'); el.classList.toggle('offline', !connected); el.innerHTML = `<i></i>${connected ? 'Village connected' : 'Reconnecting…'}`; }
+function realEventsRecent() { return snapshot.journal.some(e => !e.session_id.startsWith('demo-') && Date.now() - e.receivedAt < 5 * 60 * 1000); }
+function setConnection(value: boolean) { connected = value; const el = $('connection'); el.classList.toggle('offline', !value); el.innerHTML = `<i></i>${value ? realEventsRecent() ? 'Claude events flowing' : 'Receiver connected' : 'Reconnecting…'}`; renderGuide(); }
+function renderGuide() { const guide = $('connection-guide'); if (!guide) return; guide.hidden = !connected || realEventsRecent(); }
 async function request(path: string, body?: unknown) {
   const response = await fetch(path, { method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
   if (!response.ok) throw new Error(response.status === 403 ? 'Refresh the page to reconnect to the local server.' : 'The local village could not receive that event.');
@@ -31,10 +48,13 @@ async function send(event: VillageEvent) { return request('/api/events', event);
 async function emit(name: string, session = 'demo-willow', extras: Partial<VillageEvent> = {}) { return send({ hook_event_name: name, session_id: session, ...extras }); }
 function useSnapshot(next: Snapshot) {
   if (next.sequence < snapshot.sequence) return;
-  snapshot = next;
-  scene.sync(next);
+  if (next.journal.length && next.sequence > snapshot.sequence && ['TaskCompleted', 'SubagentStop'].includes(next.journal.at(-1)!.hook_event_name)) chime();
+  rawSnapshot = next;
+  snapshot = { ...next, actors: Object.fromEntries(Object.entries(next.actors).map(([id, actor]) => [id, { ...actor, name: typeof settings.names[id] === 'string' ? settings.names[id] : actor.name, look: Number.isInteger(settings.looks[id]) ? settings.looks[id] : 0 }])) };
+  scene.sync(snapshot);
   if (!selectedId || !snapshot.actors[selectedId]) selectedId = Object.values(snapshot.actors).find(a => a.kind === 'hero' && a.activity !== 'leaving')?.id ?? Object.keys(snapshot.actors)[0];
   scene.select(selectedId);
+  setConnection(connected);
   render();
 }
 function selectResident(id: string) {
@@ -52,23 +72,35 @@ function render() {
   const list = heroes.flatMap(hero => [hero, ...residents.filter(a => a.kind === 'companion' && a.sessionId === hero.sessionId)]);
   const orphaned = residents.filter(a => a.kind === 'companion' && !heroes.some(h => h.sessionId === a.sessionId));
   list.push(...orphaned);
+  const query = $<HTMLInputElement>('resident-search').value.trim().toLowerCase();
+  const shown = query ? list.filter(a => [a.name, a.sessionId, a.toolName ?? '', ...Object.values(a.activeTools)].some(value => value.toLowerCase().includes(query))) : list;
+  const needsAttention = residents.filter(a => a.activity === 'waiting' || a.activity === 'interrupted' || a.stale);
+  $('attention').innerHTML = needsAttention.length ? `<strong>${needsAttention.length} need a look</strong>${needsAttention.map(a => `<button data-attention="${escape(a.id)}">${escape(a.name)} · ${a.stale ? 'No recent event' : a.activity === 'waiting' ? 'Waiting for you' : 'Interrupted'}</button>`).join('')}` : '';
+  $('attention').querySelectorAll<HTMLButtonElement>('[data-attention]').forEach(button => button.onclick = () => selectResident(button.dataset.attention!));
+  $('quest-count').textContent = `${snapshot.completedQuests ?? 0} quest${snapshot.completedQuests === 1 ? '' : 's'} celebrated`;
   $('resident-count').textContent = String(residents.length);
   const companions = residents.length - heroes.length;
   $('world-count').textContent = `${heroes.length} adventurer${heroes.length === 1 ? '' : 's'}${companions ? ` · ${companions} companion${companions === 1 ? '' : 's'}` : ''}`;
   const onlyDemo = heroes.every(a => a.sessionId.startsWith('demo-'));
   $('world-mode').textContent = onlyDemo && residents.length ? 'A LITTLE DEMO WORLD' : 'YOUR LOCAL VILLAGE';
-  const cards = list.map(actor => {
+  const cards = shown.map(actor => {
     const portrait = scene.portrait(actor);
-    return `<button class="resident-card ${actor.kind} ${actor.id === selectedId ? 'selected' : ''}" data-resident="${escape(actor.id)}" aria-pressed="${actor.id === selectedId}"><span class="portrait">${portrait ? `<img src="${portrait}" alt="" />` : '✦'}</span><span class="resident-info"><strong>${escape(actor.name)}</strong><small>${escape(activityLabel[actor.activity])}</small></span><i class="resident-state ${actor.activity}" aria-hidden="true"></i></button>`;
+    return `<button class="resident-card ${actor.kind} ${actor.id === selectedId ? 'selected' : ''}" data-resident="${escape(actor.id)}" aria-pressed="${actor.id === selectedId}"><span class="portrait">${portrait ? `<img src="${portrait}" alt="" />` : '✦'}</span><span class="resident-info"><strong>${escape(actor.name)}</strong><small>${escape(actor.stale ? 'No recent event' : activityLabel[actor.activity])}</small></span><i class="resident-state ${actor.activity}" aria-hidden="true"></i></button>`;
   }).join('');
-  $('residents').innerHTML = cards || '<p class="empty-note">It’s quiet here. Start a session or play a village day.</p>';
+  $('residents').innerHTML = cards || `<p class="empty-note">${query ? 'No residents match that search.' : 'It’s quiet here. Start a session or play a village day.'}</p>`;
   $('residents').querySelectorAll<HTMLButtonElement>('[data-resident]').forEach(button => button.onclick = () => selectResident(button.dataset.resident!));
   const actor = selectedId ? snapshot.actors[selectedId] : undefined;
   if (actor) {
+    if (document.activeElement?.id !== 'nickname') {
     const children = residents.filter(a => a.sessionId === actor.sessionId && a.kind === 'companion').length;
     const active = Object.keys(actor.activeTools).length;
     const description = actor.activity === 'waiting' ? 'A question is waiting for you. Your adventurer will continue when Claude receives your response.' : actor.activity === 'sleeping' ? 'The day’s work is done. A new prompt will wake this sleepy adventurer.' : actor.activity === 'working' ? `Making progress at the ${stationLabel[actor.station]}.${active > 1 ? ` ${active} tools are working together.` : ''}` : actor.activity === 'resting' ? 'A well-earned break. Soon the campfire stories will turn into dreams.' : actor.kind === 'companion' && actor.activity === 'celebrating' ? 'Bringing a little sparkle back to the main adventurer.' : `${activityLabel[actor.activity]} near the ${stationLabel[actor.station]}.`;
-    $('character-detail').innerHTML = `<div class="detail-top"><strong>${escape(actor.name)}’s story</strong><span class="detail-label">${actor.kind === 'hero' ? 'ADVENTURER' : 'COMPANION'}</span></div><p>${escape(description)}</p><p class="detail-meta">${actor.sessionId.startsWith('demo-') ? 'DEMO' : 'CLAUDE SESSION'} · ${actor.kind === 'hero' ? `${children} companion${children === 1 ? '' : 's'}` : escape(actor.agentId ?? '')}${actor.toolName ? ` · ${escape(actor.toolName)}` : ''}</p>`;
+    const timeline = snapshot.journal.filter(e => e.session_id === actor.sessionId && e.agent_id === actor.agentId).slice(-12).reverse();
+    $('character-detail').innerHTML = `<div class="detail-top"><strong>${escape(actor.name)}’s story</strong><span class="detail-label">${actor.kind === 'hero' ? 'ADVENTURER' : 'COMPANION'}</span></div><p>${escape(actor.stale ? 'No recent event from Claude. This status may be out of date.' : description)}</p><p class="detail-meta">${actor.sessionId.startsWith('demo-') ? 'DEMO' : 'CLAUDE SESSION'} · ${actor.kind === 'hero' ? `${children} companion${children === 1 ? '' : 's'}` : escape(actor.agentId ?? '')} · last event ${age(actor.lastObservedAt ?? actor.updatedAt)} ago</p><div class="detail-tools"><strong>Active tools</strong>${Object.values(actor.activeTools).length ? `<ul>${Object.values(actor.activeTools).map(tool => `<li>${escape(tool)}</li>`).join('')}</ul>` : '<span>None</span>'}</div><div class="customize"><label>Nickname<input id="nickname" maxlength="24" value="${escape(settings.names[actor.id] ?? '')}" placeholder="${escape(actor.name)}" /></label><label>Look<select id="look-select">${(actor.kind === 'hero' ? ['Pointed cap', 'Explorer cap', 'Flower crown'] : ['Sprout', 'Fox', 'Cat']).map((label, index) => `<option value="${index}" ${actor.look === index ? 'selected' : ''}>${label}</option>`).join('')}</select></label></div><details class="timeline"><summary>Session timeline (${timeline.length})</summary>${timeline.map(e => `<div><time>${new Date(e.receivedAt).toLocaleTimeString()}</time> ${escape(eventDescription(e)[1])}</div>`).join('') || '<p>No events yet.</p>'}</details>`;
+    $<HTMLInputElement>('nickname').oninput = event => { const value = (event.target as HTMLInputElement).value.trim().slice(0, 24); if (value) settings.names[actor.id] = value; else delete settings.names[actor.id]; saveSettings(); };
+    $<HTMLInputElement>('nickname').onblur = () => useSnapshot(rawSnapshot);
+    $<HTMLSelectElement>('look-select').onchange = event => { settings.looks[actor.id] = Number((event.target as HTMLSelectElement).value); saveSettings(); useSnapshot(rawSnapshot); };
+    }
   } else $('character-detail').innerHTML = '<p class="empty-note">Choose a resident to see their story.</p>';
   const currentOption = actorSelect.value;
   const demos = Object.values(snapshot.actors).filter(a => a.sessionId.startsWith('demo-') && a.activity !== 'leaving').sort((a, b) => a.kind.localeCompare(b.kind));
@@ -171,6 +203,17 @@ async function playDay() {
 playButton.onclick = () => void playDay();
 $('reset-demo').onclick = () => void (async () => { stopDemo(); await request('/api/reset', {}); toast('A fresh start for the demo village. Real sessions stay put.'); })().catch(error => toast(error.message));
 $('setup-open').onclick = () => $<HTMLDialogElement>('setup-dialog').showModal();
+$('connection-guide-open').onclick = () => $<HTMLDialogElement>('setup-dialog').showModal();
+$<HTMLInputElement>('resident-search').oninput = () => render();
+const nightToggle = $<HTMLInputElement>('night-toggle');
+nightToggle.checked = settings.night;
+scene.setNight(settings.night);
+nightToggle.onchange = () => { settings.night = nightToggle.checked; scene.setNight(settings.night); saveSettings(); updateWeather(); };
+const soundToggle = $<HTMLInputElement>('sound-toggle');
+soundToggle.checked = settings.sound;
+soundToggle.onchange = () => { settings.sound = soundToggle.checked; saveSettings(); if (settings.sound) chime(); };
+function updateWeather() { $('weather').innerHTML = settings.night ? '<span aria-hidden="true">☾</span> A quiet night for a quest' : '<span aria-hidden="true">☀</span> A fine day for a quest'; }
+updateWeather();
 $('zoom-in').onclick = () => { scene.setZoom(scene.zoomLevel + .25); $('zoom-value').textContent = `${scene.zoomLevel}×`; };
 $('zoom-out').onclick = () => { scene.setZoom(scene.zoomLevel - .25); $('zoom-value').textContent = `${scene.zoomLevel}×`; };
 const motionButton = $<HTMLButtonElement>('motion-toggle');
@@ -191,5 +234,5 @@ void (async () => {
     }
   } catch (error) { setConnection(false); toast((error as Error).message); }
 })();
-setInterval(() => { if (!document.hidden) render(); }, 10000);
+setInterval(() => { if (!document.hidden) { setConnection(connected); render(); } }, 10000);
 window.addEventListener('pagehide', () => { stopDemo(); stream.close(); game.destroy(true); });

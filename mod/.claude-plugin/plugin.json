@@ -1,0 +1,6 @@
+{
+  "name": "pixel-village",
+  "version": "0.2.0",
+  "description": "Watch your Claude Code sessions in a local pixel village without configuring settings hooks.",
+  "author": { "name": "Sergb39" }
+}

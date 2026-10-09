@@ -4,6 +4,8 @@ dist/
 .village/
 *.log
 config/hooks.*.json
+config/mod-marketplace/
+mod/.claude-plugin/types/
 artifacts/
 .claude/
 .agents/

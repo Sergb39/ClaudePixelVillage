@@ -1,6 +1,6 @@
-import { actorKey, COMPANION_RETURN_MS, DEPARTURE_MS, type ActorState, type Snapshot, type Station, type VillageEvent } from './types';
+import { actorKey, COMPANION_RETURN_MS, DEPARTURE_MS, STALE_SESSION_MS, type ActorState, type Snapshot, type Station, type VillageEvent } from './types';
 
-export const emptySnapshot = (): Snapshot => ({ sequence: 0, actors: {}, journal: [] });
+export const emptySnapshot = (): Snapshot => ({ sequence: 0, actors: {}, journal: [], completedQuests: 0 });
 export function sanitizeEvent(input: unknown): VillageEvent | null {
   if (!input || typeof input !== 'object') return null;
   const raw = input as Record<string, unknown>;
@@ -26,9 +26,9 @@ function hero(sessionId: string, now: number, agentId?: string, agentType?: stri
   const companionHash = stableHash(agentId ?? '');
   const typeNames: Record<string, string> = { explore: 'Scout', plan: 'Sage', 'general-purpose': 'Sprout' };
   const name = agentId ? `${typeNames[agentType?.toLowerCase() ?? ''] ?? companionNames[companionHash % companionNames.length]} ${companionHash.toString(36).slice(-4).padStart(4, '0')}` : demoName ?? names[hash % names.length];
-  return { id: actorKey(sessionId, agentId), sessionId, ...(agentId ? { agentId } : {}), name, kind: agentId ? 'companion' : 'hero', palette: hash % 8, activity: 'arriving', station: 'gate', activeTools: {}, lastEvent: 'SessionStart', updatedAt: now };
+  return { id: actorKey(sessionId, agentId), sessionId, ...(agentId ? { agentId } : {}), name, kind: agentId ? 'companion' : 'hero', palette: hash % 8, activity: 'arriving', station: 'gate', activeTools: {}, completedTools: {}, lastEvent: 'SessionStart', updatedAt: now, lastObservedAt: now };
 }
-/** Completion tombstones are derived from the bounded journal, so reordered starts cannot revive finished tools. */
+/** Tool completion and permission state live on the actor, independent of the display journal. */
 export function reduceEvent(state: Snapshot, event: VillageEvent, now = Date.now()): Snapshot {
   const actors: Snapshot['actors'] = Object.assign(Object.create(null), state.actors);
   const closedActors: NonNullable<Snapshot['closedActors']> = Object.assign(Object.create(null), state.closedActors);
@@ -37,11 +37,12 @@ export function reduceEvent(state: Snapshot, event: VillageEvent, now = Date.now
   const close = (id: string, reason: 'SubagentStop' | 'SessionEnd') => {
     if (!Object.hasOwn(closedActors, id) || reason === 'SessionEnd' && closedActors[id].event !== 'SessionEnd') closedActors[id] = { event: reason, at: now };
   };
+  let completedQuests = state.completedQuests ?? 0;
   const finish = (): Snapshot => {
     // Bound lifecycle tombstones separately from the high-volume tool journal.
     const retained = Object.fromEntries(Object.entries(closedActors).sort((a, b) => b[1].at - a[1].at).slice(0, 500));
     const sequence = state.sequence + 1;
-    return { sequence, actors, closedActors: retained, journal: [...state.journal, { ...event, sequence, receivedAt: now }].slice(-300) };
+    return { sequence, actors, closedActors: retained, completedQuests, journal: [...state.journal, { ...event, sequence, receivedAt: now }].slice(-300) };
   };
   if (event.hook_event_name === 'SessionEnd' && !event.agent_id) {
     close(mainKey, 'SessionEnd');
@@ -67,14 +68,14 @@ export function reduceEvent(state: Snapshot, event: VillageEvent, now = Date.now
   if (!actors[key] && !canSpawn) return finish();
   if (!actors[mainKey]) actors[mainKey] = hero(event.session_id, now);
   const previous = actors[key] ?? hero(event.session_id, now, event.agent_id, event.agent_type);
-  const actor = { ...previous, activeTools: { ...previous.activeTools }, lastEvent: event.hook_event_name, updatedAt: now };
+  const actor = { ...previous, activeTools: { ...previous.activeTools }, completedTools: { ...previous.completedTools }, lastEvent: event.hook_event_name, updatedAt: now, lastObservedAt: now, stale: false };
   if (sessionWake || event.hook_event_name === 'SubagentStart') actor.finishedAt = undefined;
   const set = (activity: ActorState['activity'], station: Station) => { actor.activity = activity; actor.station = station; };
   const toolId = event.tool_use_id ?? `uncorrelated:${event.tool_name ?? 'tool'}`;
-  const completed = state.journal.some(e => e.session_id === event.session_id && e.agent_id === event.agent_id && e.tool_use_id === event.tool_use_id && !!event.tool_use_id && /^(PostToolUse|PostToolUseFailure)$/.test(e.hook_event_name));
+  const completed = !!event.tool_use_id && Object.hasOwn(actor.completedTools, event.tool_use_id);
   switch (event.hook_event_name) {
     case 'SessionStart': if (previous.activity === 'leaving' || previous.activity === 'sleeping' || previous.activity === 'resting') set('arriving', 'gate'); break;
-    case 'SubagentStart': if (!actors[key] || previous.finishedAt !== undefined) { actor.activeTools = {}; actor.toolName = undefined; set('arriving', 'board'); } break;
+    case 'SubagentStart': if (!actors[key] || previous.finishedAt !== undefined) { actor.activeTools = {}; actor.completedTools = {}; actor.toolName = undefined; set('arriving', 'board'); } break;
     case 'UserPromptSubmit': case 'UserPromptExpansion': case 'TaskCreated': set('thinking', 'board'); break;
     case 'PreToolUse':
       if (!completed) { Object.defineProperty(actor.activeTools, toolId, { value: event.tool_name ?? 'Tool', enumerable: true, configurable: true, writable: true }); actor.toolName = event.tool_name; set('working', toolStation(event.tool_name)); }
@@ -82,15 +83,19 @@ export function reduceEvent(state: Snapshot, event: VillageEvent, now = Date.now
     case 'PostToolUse': case 'PostToolUseFailure':
       if (completed && !Object.hasOwn(actor.activeTools, toolId)) { actor.updatedAt = previous.updatedAt; actor.lastEvent = previous.lastEvent; break; }
       delete actor.activeTools[toolId];
+      if (event.tool_use_id) {
+        actor.completedTools[event.tool_use_id] = now;
+        actor.completedTools = Object.fromEntries(Object.entries(actor.completedTools).sort((a, b) => b[1] - a[1]).slice(0, 500));
+      }
       if (Object.keys(actor.activeTools).length) { actor.toolName = Object.values(actor.activeTools).at(-1); set('working', toolStation(actor.toolName)); }
       else { actor.toolName = undefined; set(event.hook_event_name === 'PostToolUseFailure' ? 'interrupted' : 'thinking', event.hook_event_name === 'PostToolUseFailure' ? 'training' : 'board'); }
       break;
-    case 'PermissionRequest': case 'Elicitation': case 'PermissionDenied': set('waiting', actor.station); break;
-    case 'Notification': if (/permission|idle_prompt|elicitation/.test(event.notification_type ?? '')) set('waiting', actor.station); break;
+    case 'PermissionRequest': case 'Elicitation': case 'PermissionDenied': actor.pendingWait = event.tool_use_id ?? null; set('waiting', actor.station); break;
+    case 'Notification': if (/permission|idle_prompt|elicitation/.test(event.notification_type ?? '')) { actor.pendingWait = event.tool_use_id ?? null; set('waiting', actor.station); } break;
     case 'ElicitationResult': case 'PostCompact': case 'PostToolBatch': set(Object.keys(actor.activeTools).length ? 'working' : 'thinking', Object.keys(actor.activeTools).length ? toolStation(actor.toolName) : 'board'); break;
     case 'Stop': case 'TeammateIdle': if (!Object.keys(actor.activeTools).length) set('resting', 'campfire'); break;
     case 'SubagentStop': actor.activeTools = {}; actor.toolName = undefined; actor.finishedAt = now; set('celebrating', 'campfire'); break;
-    case 'TaskCompleted': if (!Object.keys(actor.activeTools).length) set('celebrating', 'board'); break;
+    case 'TaskCompleted': completedQuests++; if (!Object.keys(actor.activeTools).length) set('celebrating', 'board'); break;
     case 'StopFailure': set('interrupted', 'campfire'); break;
     case 'SessionEnd': actor.activeTools = {}; set('leaving', 'gate'); break;
     case 'PreCompact': case 'InstructionsLoaded': set('thinking', 'library'); break;
@@ -99,9 +104,9 @@ export function reduceEvent(state: Snapshot, event: VillageEvent, now = Date.now
   }
   if (previous.activity === 'waiting') {
     const responseEvents = ['UserPromptSubmit', 'ElicitationResult', 'Stop', 'StopFailure', 'SubagentStop', 'SessionEnd'];
-    const latestWait = [...state.journal].reverse().find(e => e.session_id === event.session_id && e.agent_id === event.agent_id && (['PermissionRequest', 'Elicitation', 'PermissionDenied'].includes(e.hook_event_name) || (e.hook_event_name === 'Notification' && /permission|idle_prompt|elicitation/.test(e.notification_type ?? ''))));
-    const completion = /^(PostToolUse|PostToolUseFailure)$/.test(event.hook_event_name) && (!latestWait?.tool_use_id || latestWait.tool_use_id === event.tool_use_id);
-    if (!responseEvents.includes(event.hook_event_name) && !completion) { actor.activity = 'waiting'; actor.station = previous.station; }
+    const completion = /^(PostToolUse|PostToolUseFailure)$/.test(event.hook_event_name) && (!previous.pendingWait || previous.pendingWait === event.tool_use_id);
+    if (responseEvents.includes(event.hook_event_name) || completion) actor.pendingWait = undefined;
+    else { actor.activity = 'waiting'; actor.station = previous.station; }
   }
   actors[key] = actor;
   while (Object.keys(actors).length > 100) {
@@ -116,6 +121,9 @@ export function tickSnapshot(state: Snapshot, now = Date.now()): Snapshot {
   const closedActors: NonNullable<Snapshot['closedActors']> = Object.assign(Object.create(null), state.closedActors);
   let changed = false;
   for (const [key, previous] of Object.entries(actors)) {
+    if (!previous.stale && !['leaving', 'resting', 'sleeping'].includes(previous.activity) && now - (previous.lastObservedAt ?? previous.updatedAt) >= STALE_SESSION_MS) {
+      actors[key] = { ...previous, stale: true }; changed = true; continue;
+    }
     // Migrate completed companions from older saved snapshots as well.
     const finishedAt = previous.finishedAt ?? (previous.kind === 'companion' && previous.lastEvent === 'SubagentStop' ? previous.updatedAt : undefined);
     if (previous.activity === 'leaving') {

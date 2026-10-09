@@ -18,10 +18,15 @@ export interface ActorState {
   name: string;
   kind: 'hero' | 'companion';
   palette: number;
+  look?: number;
   activity: Activity;
   station: Station;
   toolName?: string;
   activeTools: Record<string, string>;
+  completedTools?: Record<string, number>;
+  pendingWait?: string | null;
+  lastObservedAt?: number;
+  stale?: boolean;
   lastEvent: string;
   updatedAt: number;
   finishedAt?: number;
@@ -33,7 +38,9 @@ export interface Snapshot {
   actors: Record<string, ActorState>;
   journal: JournalEvent[];
   closedActors?: Record<string, ClosedActor>;
+  completedQuests?: number;
 }
+export const STALE_SESSION_MS = 5 * 60 * 1000;
 export const COMPANION_RETURN_MS = 12000;
 export const DEPARTURE_MS = 12000;
 export const actorKey = (sessionId: string, agentId?: string) => `${sessionId}${agentId ? `::${agentId}` : ''}`;
